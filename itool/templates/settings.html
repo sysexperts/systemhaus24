@@ -140,6 +140,20 @@
 
 </div>
 
+{% if session.get('role') == 'admin' %}
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5 max-w-sm">
+    <p class="text-sm font-semibold text-gray-700 mb-1">Daten-Backup herunterladen</p>
+    <p class="text-xs text-gray-400 mb-4">ZIP-Archiv mit Datenbank, Dokumenten und Avataren.</p>
+    <a href="{{ url_for('backup') }}"
+       class="inline-flex items-center gap-2 bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+      </svg>
+      Backup herunterladen
+    </a>
+  </div>
+{% endif %}
+
 <!-- ══════════════ TAB: Firma ══════════════ -->
 <div id="pane-firma" class="tab-pane hidden space-y-5">
   <form method="POST" action="{{ url_for('settings') }}#firma">

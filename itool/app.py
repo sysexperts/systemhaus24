@@ -1250,24 +1250,27 @@ def api_counts():
 # ── Backup ────────────────────────────────────────────────────────────────────
 
 @app.route("/backup")
-@login_required
+@admin_required
 def backup():
+    import zipfile, io
     data_dir = os.path.join(os.path.dirname(__file__), "data")
-    src = os.path.join(data_dir, "itool.db")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dst = os.path.join(data_dir, f"backup_{ts}.db")
-    shutil.copy2(src, dst)
-    # Clean up old backups — keep only the 3 most recent
-    backups = sorted(
-        [f for f in os.listdir(data_dir) if f.startswith("backup_") and f.endswith(".db")],
-        reverse=True
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(data_dir):
+            for fname in files:
+                if fname.endswith(".db") and fname != "itool.db":
+                    continue  # alte backup_.db überspringen
+                full = os.path.join(root, fname)
+                arcname = os.path.relpath(full, os.path.dirname(data_dir))
+                zf.write(full, arcname)
+    buf.seek(0)
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=f"systemhaus24_backup_{ts}.zip",
+        mimetype="application/zip",
     )
-    for old in backups[3:]:
-        try:
-            os.remove(os.path.join(data_dir, old))
-        except OSError:
-            pass
-    return send_file(dst, as_attachment=True, download_name=f"itool_backup_{ts}.db")
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
