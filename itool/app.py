@@ -313,8 +313,44 @@ def feed_messages_json():
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+def _no_users_exist():
+    db = get_db()
+    count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    db.close()
+    return count == 0
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    if not _no_users_exist():
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        display  = request.form.get("display_name", "").strip()
+        pw       = request.form.get("password", "")
+        pw2      = request.form.get("password2", "")
+        if not username or not pw:
+            return render_template("setup.html", error="Benutzername und Passwort erforderlich.")
+        if pw != pw2:
+            return render_template("setup.html", error="Passwörter stimmen nicht überein.")
+        if not _no_users_exist():
+            return redirect(url_for("login"))
+        db = get_db()
+        phash = generate_password_hash(pw)
+        db.execute(
+            "INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,?)",
+            (username, phash, display or username, "admin"))
+        db.commit()
+        db.close()
+        flash("Administrator-Konto angelegt. Bitte anmelden.", "success")
+        return redirect(url_for("login"))
+    return render_template("setup.html", error=None)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if _no_users_exist():
+        return redirect(url_for("setup"))
     if request.method == "POST":
         ip = request.remote_addr or "unknown"
         if _check_rate_limit(ip):
@@ -2450,12 +2486,9 @@ if __name__ == "__main__":
     init_db()
     db = get_db()
     existing = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if existing == 0:
-        db.execute("INSERT INTO users (username, password_hash) VALUES (?,?)",
-                   ("admin", generate_password_hash("admin")))
-        db.commit()
-        print("Default login: admin / admin")
     db.close()
+    if existing == 0:
+        print("Kein Benutzer vorhanden — Ersteinrichtung unter /setup erforderlich.")
     t = threading.Thread(target=imap_loop, daemon=True)
     t.start()
     t2 = threading.Thread(target=check_recurring_invoices, daemon=True)

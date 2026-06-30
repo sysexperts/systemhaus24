@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if app_cfg.get('company_name') %}{{ app_cfg.get('company_name') }} – Ersteinrichtung{% else %}Ersteinrichtung{% endif %}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .cloud-bg {
+    background-color: #cdd5de;
+    background-image:
+      radial-gradient(ellipse 700px 500px at -5% 5%,  rgba(255,255,255,0.85) 0%, transparent 65%),
+      radial-gradient(ellipse 500px 400px at 20% 85%, rgba(255,255,255,0.75) 0%, transparent 65%),
+      radial-gradient(ellipse 600px 450px at 55% 20%, rgba(255,255,255,0.55) 0%, transparent 65%),
+      radial-gradient(ellipse 800px 550px at 90% 70%, rgba(255,255,255,0.70) 0%, transparent 65%),
+      radial-gradient(ellipse 350px 280px at 45% 100%,rgba(255,255,255,0.60) 0%, transparent 65%);
+  }
+</style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+  <!-- Left blue panel -->
+  <div class="w-72 shrink-0 bg-gradient-to-b from-[#1c3461] to-[#2a4a8a] flex flex-col justify-between p-8 shadow-2xl">
+    <div class="flex flex-col items-center text-center">
+      {% if app_cfg.get('company_logo_ext') %}
+      <img src="{{ url_for('company_logo') }}" alt="Logo" class="max-h-20 max-w-full object-contain mb-5">
+      {% endif %}
+      {% if app_cfg.get('company_name') %}
+      <div class="text-white font-bold text-xl mb-2">{{ app_cfg.get('company_name') }}</div>
+      {% endif %}
+    </div>
+    <div></div>
+  </div>
+
+  <!-- Right setup area -->
+  <div class="flex-1 cloud-bg flex flex-col items-center justify-center">
+
+    <div class="mb-2 text-2xl font-bold text-gray-700/60 select-none">Ersteinrichtung</div>
+    <p class="text-sm text-gray-500 mb-6 text-center max-w-sm">
+      Es ist noch kein Benutzer angelegt. Lege jetzt das erste Konto an –
+      es wird automatisch zum Administrator.
+    </p>
+
+    <form method="POST" class="w-80 space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      {% if error %}
+        <div class="px-3 py-2 rounded-lg text-sm bg-red-100 text-red-700 border border-red-200">{{ error }}</div>
+      {% endif %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="px-3 py-2 rounded-lg text-sm bg-red-100 text-red-700 border border-red-200">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="border-b border-gray-400/60">
+        <input name="username" type="text" placeholder="Benutzername" required autofocus
+               class="w-full bg-transparent py-2 text-gray-700 placeholder-gray-400 text-sm focus:outline-none">
+      </div>
+      <div class="border-b border-gray-400/60">
+        <input name="display_name" type="text" placeholder="Anzeigename (optional)"
+               class="w-full bg-transparent py-2 text-gray-700 placeholder-gray-400 text-sm focus:outline-none">
+      </div>
+      <div class="border-b border-gray-400/60">
+        <input name="password" type="password" placeholder="Passwort" required
+               class="w-full bg-transparent py-2 text-gray-700 placeholder-gray-400 text-sm focus:outline-none">
+      </div>
+      <div class="border-b border-gray-400/60">
+        <input name="password2" type="password" placeholder="Passwort wiederholen" required
+               class="w-full bg-transparent py-2 text-gray-700 placeholder-gray-400 text-sm focus:outline-none">
+      </div>
+      <button type="submit"
+              class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#2a4a8a] transition-colors mt-2">
+        Administrator-Konto anlegen
+      </button>
+    </form>
+  </div>
+</body>
+</html>
