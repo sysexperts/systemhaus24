@@ -40,7 +40,7 @@ app.config.update(
 
 # Password encryption for DB-stored secrets (SMTP/IMAP)
 def _fernet():
-    """Derive a Fernet-compatible key from SECRET_KEY."""
+    """Derive a Fernet key from SECRET_KEY (32-byte SHA-256, base64url-encoded)."""
     import base64
     raw = hashlib.sha256(app.secret_key.encode()).digest()
     return base64.urlsafe_b64encode(raw)
@@ -48,22 +48,17 @@ def _fernet():
 def encrypt_secret(plaintext: str) -> str:
     if not plaintext:
         return ""
-    key = _fernet()
-    # Simple XOR-based encryption using HMAC key stream (no extra deps)
-    import base64
-    k = hashlib.sha256(key).digest()
-    data = plaintext.encode()
-    encrypted = bytes(b ^ k[i % len(k)] for i, b in enumerate(data))
-    return "enc:" + base64.urlsafe_b64encode(encrypted).decode()
+    from cryptography.fernet import Fernet
+    return "fernet:" + Fernet(_fernet()).encrypt(plaintext.encode()).decode()
 
 def decrypt_secret(ciphertext: str) -> str:
-    if not ciphertext or not ciphertext.startswith("enc:"):
-        return ciphertext or ""
-    import base64
-    key = _fernet()
-    k = hashlib.sha256(key).digest()
-    encrypted = base64.urlsafe_b64decode(ciphertext[4:])
-    return bytes(b ^ k[i % len(k)] for i, b in enumerate(encrypted)).decode()
+    if not ciphertext:
+        return ""
+    if not ciphertext.startswith("fernet:"):
+        # Altes Format (XOR/enc:) oder unbekannt — leer zurückgeben
+        return ""
+    from cryptography.fernet import Fernet
+    return Fernet(_fernet()).decrypt(ciphertext[7:].encode()).decode()
 
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 
