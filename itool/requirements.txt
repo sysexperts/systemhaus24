@@ -1,3 +1,4 @@
 flask==3.0.3
 werkzeug==3.0.3
 xhtml2pdf==0.2.16
+python-dateutil==2.9.0

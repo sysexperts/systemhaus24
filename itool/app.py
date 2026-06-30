@@ -2092,6 +2092,159 @@ def expense_receipt(eid):
     return send_from_directory(RECEIPT_DIR, filename)
 
 
+# ── Wiederkehrende Rechnungen ─────────────────────────────────────────────────
+
+def _next_date(current_date_str, interval):
+    """Calculate next invoice date based on interval."""
+    from dateutil.relativedelta import relativedelta
+    d = date.fromisoformat(current_date_str)
+    if interval == "monthly":
+        return (d + relativedelta(months=1)).isoformat()
+    elif interval == "quarterly":
+        return (d + relativedelta(months=3)).isoformat()
+    elif interval == "yearly":
+        return (d + relativedelta(years=1)).isoformat()
+    return (d + relativedelta(months=1)).isoformat()
+
+
+def _create_invoice_from_recurring(db, rec):
+    """Create an actual invoice from a recurring template."""
+    num = next_invoice_number()
+    due = (date.fromisoformat(rec["next_date"]) + __import__('datetime').timedelta(days=14)).isoformat()
+    cur = db.execute(
+        "INSERT INTO invoices (number, customer_id, date, due_date, status, notes) VALUES (?,?,?,?,?,?)",
+        (num, rec["customer_id"], rec["next_date"], due, "draft",
+         f"Automatisch erstellt aus Vorlage: {rec['name']}")
+    )
+    inv_id = cur.lastrowid
+    items = db.execute("SELECT * FROM recurring_invoice_items WHERE recurring_id=?", (rec["id"],)).fetchall()
+    for it in items:
+        db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (?,?,?,?)",
+                   (inv_id, it["description"], it["quantity"], it["unit_price"]))
+    # Advance next_date
+    new_next = _next_date(rec["next_date"], rec["interval"])
+    db.execute("UPDATE recurring_invoices SET next_date=?, last_created=? WHERE id=?",
+               (new_next, rec["next_date"], rec["id"]))
+    print(f"[RECURRING] Rechnung {num} für Vorlage '{rec['name']}' erstellt (nächste: {new_next})")
+    return inv_id
+
+
+def check_recurring_invoices():
+    """Background job: create due recurring invoices."""
+    while True:
+        try:
+            db = get_db()
+            today = date.today().isoformat()
+            due = db.execute(
+                "SELECT * FROM recurring_invoices WHERE status='active' AND next_date<=?", (today,)
+            ).fetchall()
+            for rec in due:
+                _create_invoice_from_recurring(db, rec)
+            if due:
+                db.commit()
+            db.close()
+        except Exception as e:
+            print(f"[RECURRING] Fehler: {e}")
+        time.sleep(3600)  # prüfe stündlich
+
+
+@app.route("/recurring")
+@login_required
+def recurring_list():
+    db = get_db()
+    recs = db.execute("""
+        SELECT r.*, c.name as customer_name, c.company as customer_company,
+               (SELECT COALESCE(SUM(quantity*unit_price),0) FROM recurring_invoice_items WHERE recurring_id=r.id) as total
+        FROM recurring_invoices r
+        JOIN customers c ON c.id=r.customer_id
+        ORDER BY r.status DESC, r.next_date ASC
+    """).fetchall()
+    customers = db.execute("SELECT id, name, company FROM customers WHERE status='customer' ORDER BY name").fetchall()
+    db.close()
+    interval_labels = {"monthly": "Monatlich", "quarterly": "Vierteljährlich", "yearly": "Jährlich"}
+    return render_template("recurring.html", recs=recs, customers=customers,
+                           interval_labels=interval_labels)
+
+
+@app.route("/recurring/new", methods=["POST"])
+@login_required
+def recurring_new():
+    customer_id  = request.form.get("customer_id")
+    name         = request.form.get("name", "").strip()
+    interval     = request.form.get("interval", "monthly")
+    start_date   = request.form.get("start_date", date.today().isoformat())
+    notes        = request.form.get("notes", "").strip()
+    descriptions = request.form.getlist("item_desc")
+    quantities   = request.form.getlist("item_qty")
+    prices       = request.form.getlist("item_price")
+
+    if not customer_id or not name or not descriptions:
+        flash("Pflichtfelder fehlen.", "error")
+        return redirect(url_for("recurring_list"))
+
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO recurring_invoices (customer_id, name, interval, day_of_month, next_date, notes) VALUES (?,?,?,?,?,?)",
+        (customer_id, name, interval, int(start_date.split("-")[2]), start_date, notes)
+    )
+    rid = cur.lastrowid
+    for desc, qty, price in zip(descriptions, quantities, prices):
+        desc = desc.strip()
+        if not desc:
+            continue
+        try:
+            qty   = float(qty or 1)
+            price = float(price or 0)
+        except ValueError:
+            continue
+        db.execute("INSERT INTO recurring_invoice_items (recurring_id, description, quantity, unit_price) VALUES (?,?,?,?)",
+                   (rid, desc, qty, price))
+    db.commit()
+    db.close()
+    flash("Wiederkehrende Rechnung erstellt.", "success")
+    return redirect(url_for("recurring_list"))
+
+
+@app.route("/recurring/<int:rid>/toggle", methods=["POST"])
+@login_required
+def recurring_toggle(rid):
+    db = get_db()
+    rec = db.execute("SELECT status FROM recurring_invoices WHERE id=?", (rid,)).fetchone()
+    if rec:
+        new_status = "paused" if rec["status"] == "active" else "active"
+        db.execute("UPDATE recurring_invoices SET status=? WHERE id=?", (new_status, rid))
+        db.commit()
+    db.close()
+    return redirect(url_for("recurring_list"))
+
+
+@app.route("/recurring/<int:rid>/run-now", methods=["POST"])
+@login_required
+def recurring_run_now(rid):
+    db = get_db()
+    rec = db.execute("SELECT * FROM recurring_invoices WHERE id=?", (rid,)).fetchone()
+    if rec:
+        inv_id = _create_invoice_from_recurring(db, rec)
+        db.commit()
+        db.close()
+        flash("Rechnung wurde sofort erstellt.", "success")
+        return redirect(url_for("invoice_view", iid=inv_id))
+    db.close()
+    flash("Vorlage nicht gefunden.", "error")
+    return redirect(url_for("recurring_list"))
+
+
+@app.route("/recurring/<int:rid>/delete", methods=["POST"])
+@login_required
+def recurring_delete(rid):
+    db = get_db()
+    db.execute("DELETE FROM recurring_invoices WHERE id=?", (rid,))
+    db.commit()
+    db.close()
+    flash("Vorlage gelöscht.", "success")
+    return redirect(url_for("recurring_list"))
+
+
 # ── Akquise / Lead Pipeline ───────────────────────────────────────────────────
 
 LEAD_STAGES = [
@@ -2305,4 +2458,7 @@ if __name__ == "__main__":
     db.close()
     t = threading.Thread(target=imap_loop, daemon=True)
     t.start()
+    t2 = threading.Thread(target=check_recurring_invoices, daemon=True)
+    t2.start()
+    print("[RECURRING] Hintergrund-Job gestartet (stündliche Prüfung)")
     app.run(host="0.0.0.0", port=5000, debug=False)

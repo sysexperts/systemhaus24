@@ -156,6 +156,27 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS recurring_invoices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL REFERENCES customers(id),
+            name TEXT NOT NULL,
+            interval TEXT NOT NULL DEFAULT 'monthly',
+            day_of_month INTEGER DEFAULT 1,
+            next_date TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            notes TEXT,
+            last_created TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS recurring_invoice_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recurring_id INTEGER NOT NULL REFERENCES recurring_invoices(id) ON DELETE CASCADE,
+            description TEXT NOT NULL,
+            quantity REAL DEFAULT 1,
+            unit_price REAL NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company TEXT,

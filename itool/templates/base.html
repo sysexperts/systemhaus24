@@ -157,6 +157,16 @@
     </div>
     {% endif %}
 
+    <!-- Wiederkehrende Rechnungen -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('recurring_list') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'recurring' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Abo-Rechnungen</span>
+      </a>
+    </div>
+
     <!-- Akquise -->
     <div class="mx-2 mb-1">
       <a href="{{ url_for('akquise') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'akquise' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">

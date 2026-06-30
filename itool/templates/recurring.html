@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Wiederkehrende Rechnungen – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-xl font-bold text-gray-800">Wiederkehrende Rechnungen</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Automatisch erstellte Rechnungen für Wartungsverträge & Abos</p>
+  </div>
+  <button onclick="document.getElementById('newModal').classList.remove('hidden')"
+          class="flex items-center gap-2 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium shadow-sm">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    Neue Vorlage
+  </button>
+</div>
+
+<!-- Hinweis-Banner -->
+<div class="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 mb-5 flex items-center gap-3">
+  <svg class="w-5 h-5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <p class="text-sm text-blue-800">
+    Aktive Vorlagen werden <strong>automatisch stündlich geprüft</strong> — fällige Rechnungen werden als <strong>Entwurf</strong> erstellt und müssen manuell gesendet werden.
+  </p>
+</div>
+
+<!-- Liste -->
+{% if recs %}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Vorlage</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kunde</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Intervall</th>
+        <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Betrag</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Nächste Rechnung</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in recs %}
+    {% set is_due = r.next_date <= today|default('') %}
+    <tr class="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+      <td class="px-5 py-4">
+        <p class="font-semibold text-gray-800">{{ r.name }}</p>
+        {% if r.notes %}<p class="text-xs text-gray-400 mt-0.5">{{ r.notes }}</p>{% endif %}
+      </td>
+      <td class="px-5 py-4">
+        <p class="font-medium text-gray-700">{{ r.customer_company or r.customer_name }}</p>
+        {% if r.customer_company %}<p class="text-xs text-gray-400">{{ r.customer_name }}</p>{% endif %}
+      </td>
+      <td class="px-5 py-4">
+        <span class="text-xs font-medium px-2.5 py-1 rounded-full
+          {% if r.interval == 'monthly' %}bg-blue-100 text-blue-700
+          {% elif r.interval == 'quarterly' %}bg-purple-100 text-purple-700
+          {% else %}bg-amber-100 text-amber-700{% endif %}">
+          {{ interval_labels.get(r.interval, r.interval) }}
+        </span>
+      </td>
+      <td class="px-5 py-4 text-right">
+        <span class="font-semibold text-gray-800">{{ '%.2f'|format(brutto(r.total)) }} €</span>
+        {% if not is_kg %}<div class="text-xs text-gray-400">inkl. MwSt.</div>{% endif %}
+      </td>
+      <td class="px-5 py-4">
+        {% if r.status == 'paused' %}
+        <span class="text-xs text-gray-400">—</span>
+        {% elif is_due %}
+        <span class="text-xs font-semibold text-red-500 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
+          Fällig seit {{ r.next_date }}
+        </span>
+        {% else %}
+        <span class="text-sm text-gray-600">{{ r.next_date }}</span>
+        {% if r.last_created %}
+        <p class="text-xs text-gray-400">Letzte: {{ r.last_created }}</p>
+        {% endif %}
+        {% endif %}
+      </td>
+      <td class="px-5 py-4">
+        <form method="POST" action="{{ url_for('recurring_toggle', rid=r.id) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors
+                    {% if r.status == 'active' %}bg-emerald-100 text-emerald-700 hover:bg-emerald-200
+                    {% else %}bg-gray-100 text-gray-500 hover:bg-gray-200{% endif %}">
+            {% if r.status == 'active' %}✓ Aktiv{% else %}⏸ Pausiert{% endif %}
+          </button>
+        </form>
+      </td>
+      <td class="px-5 py-4">
+        <div class="flex items-center justify-end gap-2">
+          {% if r.status == 'active' %}
+          <form method="POST" action="{{ url_for('recurring_run_now', rid=r.id) }}"
+                onsubmit="return confirm('Rechnung jetzt sofort erstellen?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-xs text-[#1c3461] hover:underline font-medium">Jetzt erstellen</button>
+          </form>
+          {% endif %}
+          <form method="POST" action="{{ url_for('recurring_delete', rid=r.id) }}"
+                onsubmit="return confirm('Vorlage löschen?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-xs text-red-400 hover:text-red-600 font-medium">Löschen</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+  <div class="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+    <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+    </svg>
+  </div>
+  <p class="text-gray-600 font-medium mb-1">Noch keine Vorlagen</p>
+  <p class="text-sm text-gray-400 mb-5">Erstelle wiederkehrende Rechnungen für Wartungsverträge, Abos oder monatliche Pauschalen.</p>
+  <button onclick="document.getElementById('newModal').classList.remove('hidden')"
+          class="bg-[#1c3461] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+    Erste Vorlage erstellen
+  </button>
+</div>
+{% endif %}
+
+<!-- Modal: Neue Vorlage -->
+<div id="newModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+      <div>
+        <h3 class="font-semibold text-gray-800">Neue wiederkehrende Rechnung</h3>
+        <p class="text-xs text-gray-400 mt-0.5">Vorlage für automatisch erstellte Rechnungen</p>
+      </div>
+      <button onclick="document.getElementById('newModal').classList.add('hidden')"
+              class="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="POST" action="{{ url_for('recurring_new') }}" class="p-6 space-y-5">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+      <!-- Basis -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold text-gray-500 mb-1.5">Bezeichnung *</label>
+          <input type="text" name="name" required placeholder="z.B. IT-Wartungsvertrag monatlich"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1.5">Kunde *</label>
+          <select name="customer_id" required
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+            <option value="">— Kunde wählen —</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.company or c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1.5">Intervall</label>
+          <select name="interval"
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+            <option value="monthly">Monatlich</option>
+            <option value="quarterly">Vierteljährlich</option>
+            <option value="yearly">Jährlich</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1.5">Startdatum (erste Rechnung)</label>
+          <input type="date" name="start_date" value="{{ now.strftime('%Y-%m-01') if now else '' }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1.5">Interne Notiz</label>
+          <input type="text" name="notes" placeholder="z.B. Vertrag #2024-04"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+      </div>
+
+      <!-- Positionen -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rechnungspositionen *</label>
+          <button type="button" onclick="addItem()"
+                  class="text-xs text-[#1c3461] hover:underline font-medium">+ Position hinzufügen</button>
+        </div>
+        <div id="itemsContainer" class="space-y-2">
+          <!-- Default item -->
+          <div class="item-row grid grid-cols-12 gap-2 items-center">
+            <input type="text" name="item_desc" placeholder="Beschreibung" required
+                   class="col-span-6 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30">
+            <input type="number" name="item_qty" placeholder="Menge" value="1" step="0.5" min="0.5"
+                   class="col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30">
+            <div class="col-span-3 relative">
+              <input type="number" name="item_price" placeholder="Preis" step="0.01" min="0" required
+                     class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30 pr-6">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">€</span>
+            </div>
+            <button type="button" onclick="this.closest('.item-row').remove()"
+                    class="col-span-1 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-400 rounded-lg hover:bg-red-50 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-3 pt-1">
+        <button type="submit"
+                class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-[#2a4a8a] transition-colors shadow-sm">
+          Vorlage speichern
+        </button>
+        <button type="button" onclick="document.getElementById('newModal').classList.add('hidden')"
+                class="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
+          Abbrechen
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function addItem() {
+  const row = document.createElement('div');
+  row.className = 'item-row grid grid-cols-12 gap-2 items-center';
+  row.innerHTML = `
+    <input type="text" name="item_desc" placeholder="Beschreibung"
+           class="col-span-6 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30">
+    <input type="number" name="item_qty" placeholder="Menge" value="1" step="0.5" min="0.5"
+           class="col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30">
+    <div class="col-span-3 relative">
+      <input type="number" name="item_price" placeholder="Preis" step="0.01" min="0"
+             class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30 pr-6">
+      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">€</span>
+    </div>
+    <button type="button" onclick="this.closest('.item-row').remove()"
+            class="col-span-1 w-7 h-7 flex items-center justify-center text-gray-300 hover:text-red-400 rounded-lg hover:bg-red-50 transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>`;
+  document.getElementById('itemsContainer').appendChild(row);
+}
+</script>
+
+{% endblock %}
