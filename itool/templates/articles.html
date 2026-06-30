@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Leistungen – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Leistungskatalog</h1>
+  <a href="{{ url_for('article_new') }}" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Neue Leistung
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+{% set categories = articles | map(attribute='category') | list | unique | sort %}
+
+{% if articles %}
+  {% for cat in ['Dienstleistung','Hardware','Software / Lizenz','Wartung','Sonstiges'] %}
+  {% set cat_items = articles | selectattr('category', 'equalto', cat) | list %}
+  {% if cat_items %}
+  <div class="mb-5">
+    <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2 px-1">{{ cat }}</p>
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-xs text-gray-400 border-b border-gray-100">
+            <th class="px-4 py-3 font-medium">Art.-Nr.</th>
+            <th class="px-4 py-3 font-medium">Bezeichnung</th>
+            <th class="px-4 py-3 font-medium">Einheit</th>
+            <th class="px-4 py-3 font-medium text-right">Netto-Preis</th>
+            <th class="px-4 py-3 font-medium text-right">MwSt.</th>
+            <th class="px-4 py-3 font-medium text-center">Status</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in cat_items %}
+          <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+            <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ a.article_number or '–' }}</td>
+            <td class="px-4 py-3">
+              <div class="font-medium text-gray-800">{{ a.name }}</div>
+              {% if a.description %}<div class="text-xs text-gray-400 truncate max-w-xs">{{ a.description }}</div>{% endif %}
+            </td>
+            <td class="px-4 py-3 text-gray-600">{{ a.unit }}</td>
+            <td class="px-4 py-3 text-right font-medium text-gray-800">{{ '%.2f'|format(a.unit_price) }} €</td>
+            <td class="px-4 py-3 text-right text-gray-500">{{ a.tax_rate|int }} %</td>
+            <td class="px-4 py-3 text-center">
+              {% if a.active %}
+              <span class="inline-block bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">Aktiv</span>
+              {% else %}
+              <span class="inline-block bg-gray-100 text-gray-400 text-xs px-2 py-0.5 rounded-full">Inaktiv</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center justify-end gap-2">
+                <a href="{{ url_for('article_edit', aid=a.id) }}" class="text-xs text-blue-500 hover:underline">Bearbeiten</a>
+                <form method="POST" action="{{ url_for('article_delete', aid=a.id) }}" onsubmit="return confirm('Leistung löschen?')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button class="text-xs text-red-400 hover:underline">Löschen</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+{% else %}
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white p-16 text-center">
+  <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+  </svg>
+  <p class="text-gray-400 mb-4">Noch keine Leistungen im Katalog.</p>
+  <a href="{{ url_for('article_new') }}" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+    Erste Leistung anlegen
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

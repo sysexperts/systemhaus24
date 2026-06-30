@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen – tkToolkit{% endblock %}
+{% block content %}
+
+<h1 class="text-lg font-semibold text-gray-600 mb-5">Einstellungen</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Tabs -->
+<div class="flex gap-1 mb-5 bg-white/60 rounded-2xl p-1.5 w-fit shadow-sm border border-white">
+  {% for tid, tlabel in [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang')] %}
+  <button onclick="switchTab('{{ tid }}')" id="tab-{{ tid }}"
+          class="tab-btn px-4 py-2 rounded-xl text-sm font-medium transition-colors text-gray-500 hover:text-gray-700">
+    {{ tlabel }}
+  </button>
+  {% endfor %}
+</div>
+
+<!-- ══════════════ TAB: Allgemein ══════════════ -->
+<div id="pane-allgemein" class="tab-pane space-y-5">
+
+  <div class="grid grid-cols-3 gap-5">
+
+    <!-- Avatar -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6 flex flex-col items-center text-center">
+      <p class="text-sm font-semibold text-gray-700 mb-4 self-start">Profilbild</p>
+      <!-- Preview -->
+      <div class="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-100 shadow mb-4">
+        {% if current_user_avatar %}
+        <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover" id="avatar-preview">
+        {% else %}
+        <div class="w-full h-full bg-[#1c3461] flex items-center justify-center" id="avatar-placeholder">
+          <span class="text-white text-3xl font-bold">{{ session.username[0].upper() }}</span>
+        </div>
+        <img src="" class="w-full h-full object-cover hidden" id="avatar-preview">
+        {% endif %}
+      </div>
+      <form method="POST" action="{{ url_for('settings_avatar') }}" enctype="multipart/form-data" id="avatar-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label class="cursor-pointer flex flex-col items-center gap-2">
+          <div class="px-4 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+            Bild auswählen…
+          </div>
+          <input type="file" name="avatar" accept=".png,.jpg,.jpeg,.gif,.webp" class="hidden"
+                 onchange="previewAvatar(this)">
+        </label>
+        <p class="text-xs text-gray-400 mt-2">PNG, JPG, WebP · wird rund dargestellt</p>
+        <button type="submit" id="avatar-save-btn"
+                class="hidden mt-3 w-full bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          Speichern
+        </button>
+      </form>
+    </div>
+
+    <!-- Password change -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-4">Passwort ändern</p>
+      <form method="POST" action="{{ url_for('settings_change_password') }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Aktuelles Passwort</label>
+          <input name="current_password" type="password" required placeholder="••••••••"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Neues Passwort</label>
+          <input name="new_password" type="password" required placeholder="Min. 6 Zeichen"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Passwort bestätigen</label>
+          <input name="confirm_password" type="password" required placeholder="••••••••"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <button type="submit" class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors mt-1">
+          Passwort ändern
+        </button>
+      </form>
+    </div>
+
+    <!-- Konto -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-4">Konto</p>
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-gray-200 shrink-0">
+          {% if current_user_avatar %}
+          <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover">
+          {% else %}
+          <div class="w-full h-full bg-[#1c3461] flex items-center justify-center">
+            <span class="text-white font-bold">{{ session.username[0].upper() }}</span>
+          </div>
+          {% endif %}
+        </div>
+        <div>
+          <p class="font-medium text-gray-800">{{ session.display_name or session.username }}</p>
+          <p class="text-xs text-gray-400">@{{ session.username }}</p>
+        </div>
+      </div>
+      <!-- Anzeigename ändern -->
+      <form method="POST" action="{{ url_for('settings_display_name') }}" class="space-y-2 border-t border-gray-100 pt-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label class="block text-xs text-gray-400">Anzeigename</label>
+        <div class="flex gap-2">
+          <input name="display_name" value="{{ session.display_name or session.username }}" placeholder="Dein Name"
+                 class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <button type="submit" class="bg-[#1c3461] text-white px-3 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+            Speichern
+          </button>
+        </div>
+        <p class="text-xs text-gray-400">Wird im Chat und in der Sidebar angezeigt.</p>
+      </form>
+      <a href="{{ url_for('backup') }}" class="mt-4 flex items-center gap-2 text-sm text-[#1c3461] hover:underline">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Datenbank-Backup herunterladen
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+  function previewAvatar(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const preview = document.getElementById('avatar-preview');
+      const placeholder = document.getElementById('avatar-placeholder');
+      preview.src = e.target.result;
+      preview.classList.remove('hidden');
+      if (placeholder) placeholder.classList.add('hidden');
+      document.getElementById('avatar-save-btn').classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  }
+  </script>
+
+</div>
+
+<!-- ══════════════ TAB: Firma ══════════════ -->
+<div id="pane-firma" class="tab-pane hidden space-y-5">
+  <form method="POST" action="{{ url_for('settings') }}#firma">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_tab" value="firma">
+
+    <div class="grid grid-cols-2 gap-5 mb-5">
+
+      <!-- Firmendaten -->
+      <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+        <p class="text-sm font-semibold text-gray-700 mb-4">Firmendaten</p>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Firmenname</label>
+            <input name="company_name" value="{{ cfg.get('company_name','') }}" placeholder="Muster IT-Services"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Straße & Hausnummer</label>
+            <input name="company_street" value="{{ cfg.get('company_street','') }}"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">PLZ</label>
+              <input name="company_zip" value="{{ cfg.get('company_zip','') }}"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs text-gray-400 mb-1">Ort</label>
+              <input name="company_city" value="{{ cfg.get('company_city','') }}"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Telefon</label>
+              <input name="company_phone" value="{{ cfg.get('company_phone','') }}"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">E-Mail</label>
+              <input name="company_email" value="{{ cfg.get('company_email','') }}"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Website</label>
+            <input name="company_website" value="{{ cfg.get('company_website','') }}" placeholder="https://..."
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Steuernummer / USt-IdNr.</label>
+            <input name="company_tax_id" value="{{ cfg.get('company_tax_id','') }}" placeholder="12/345/67890"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+      </div>
+
+      <!-- Bankdaten + Kleingewerbe -->
+      <div class="space-y-5">
+        <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+          <p class="text-sm font-semibold text-gray-700 mb-4">Bankverbindung</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Bank / Institut</label>
+              <input name="company_bank" value="{{ cfg.get('company_bank','') }}" placeholder="Sparkasse Musterstadt"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">IBAN</label>
+              <input name="company_iban" value="{{ cfg.get('company_iban','') }}" placeholder="DE00 0000 0000 0000 0000 00"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">BIC</label>
+              <input name="company_bic" value="{{ cfg.get('company_bic','') }}" placeholder="SSKMDEMMXXX"
+                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+          <p class="text-sm font-semibold text-gray-700 mb-1">Steuerregelung</p>
+          <p class="text-xs text-gray-400 mb-4">Gilt für alle Rechnungen und den Leistungskatalog.</p>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-xl border-2 transition-colors
+                        {% if cfg.get('company_kleingewerbe')=='1' %}border-blue-400 bg-blue-50{% else %}border-gray-200 hover:border-gray-300{% endif %}">
+            <input type="checkbox" name="company_kleingewerbe" value="1"
+                   {% if cfg.get('company_kleingewerbe')=='1' %}checked{% endif %}
+                   class="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1c3461]"
+                   onchange="this.closest('label').classList.toggle('border-blue-400',this.checked);
+                             this.closest('label').classList.toggle('bg-blue-50',this.checked);
+                             this.closest('label').classList.toggle('border-gray-200',!this.checked)">
+            <div>
+              <p class="text-sm font-medium text-gray-800">Kleinunternehmerregelung (§19 UStG)</p>
+              <p class="text-xs text-gray-500 mt-0.5">Rechnungen werden ohne Umsatzsteuer ausgestellt. Auf jeder Rechnung erscheint der gesetzliche Hinweis gemäß §19 UStG.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Firmendaten speichern
+    </button>
+  </form>
+
+  <!-- Logo uploads (one form, two fields) -->
+  <form method="POST" action="{{ url_for('settings_logo') }}" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="grid grid-cols-2 gap-5">
+
+    <!-- Firmenlogo -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-1">Firmenlogo</p>
+      <p class="text-xs text-gray-400 mb-4">Erscheint in der Sidebar und auf dem Anmeldefenster. PNG, JPG oder SVG.</p>
+      {% if cfg.get('company_logo_ext') %}
+      <img src="{{ url_for('company_logo') }}" alt="Firmenlogo"
+           class="h-14 object-contain border border-gray-200 rounded-xl p-2 bg-white mb-3">
+      {% endif %}
+      <label class="flex items-center gap-2 cursor-pointer bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 transition-colors w-fit">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span id="logo-label">{% if cfg.get('company_logo_ext') %}Ersetzen…{% else %}Auswählen…{% endif %}</span>
+        <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif,.svg" class="hidden"
+               onchange="document.getElementById('logo-label').textContent=this.files[0]?.name||'Auswählen…'">
+      </label>
+    </div>
+
+    <!-- Rechnungslogo -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-1">Rechnungslogo</p>
+      <p class="text-xs text-gray-400 mb-4">Erscheint auf Rechnungen und PDF-Anhängen. Wenn leer, wird das Firmenlogo verwendet.</p>
+      {% if cfg.get('invoice_logo_ext') %}
+      <img src="{{ url_for('invoice_logo') }}" alt="Rechnungslogo"
+           class="h-14 object-contain border border-gray-200 rounded-xl p-2 bg-white mb-3">
+      {% endif %}
+      <label class="flex items-center gap-2 cursor-pointer bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 transition-colors w-fit">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span id="inv-logo-label">{% if cfg.get('invoice_logo_ext') %}Ersetzen…{% else %}Auswählen…{% endif %}</span>
+        <input type="file" name="invoice_logo" accept=".png,.jpg,.jpeg,.gif,.svg" class="hidden"
+               onchange="document.getElementById('inv-logo-label').textContent=this.files[0]?.name||'Auswählen…'">
+      </label>
+    </div>
+
+  </div>
+  <div class="mt-3">
+    <button type="submit" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Logos speichern
+    </button>
+  </div>
+  </form>
+</div>
+
+<!-- ══════════════ TAB: SMTP ══════════════ -->
+<div id="pane-smtp" class="tab-pane hidden">
+  <form method="POST" action="{{ url_for('settings') }}#smtp">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_tab" value="smtp">
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6 mb-5 max-w-xl">
+      <div class="flex items-center gap-2 mb-1">
+        <svg class="w-4 h-4 text-[#1c3461]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <p class="text-sm font-semibold text-gray-700">E-Mail Ausgang (SMTP)</p>
+      </div>
+      <p class="text-xs text-gray-400 mb-4">Für den Versand von Rechnungen und Ticket-E-Mails. Port 587 = STARTTLS, Port 465 = SSL.</p>
+      <div class="space-y-3">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-400 mb-1">SMTP Host</label>
+            <input name="smtp_host" value="{{ cfg.get('smtp_host','') }}" placeholder="smtp.gmail.com"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Port</label>
+            <input name="smtp_port" value="{{ cfg.get('smtp_port','587') }}"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Benutzername / E-Mail</label>
+          <input name="smtp_user" value="{{ cfg.get('smtp_user','') }}" placeholder="deine@email.de"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Passwort / App-Passwort</label>
+          <input name="smtp_pass" type="password" value="{{ cfg.get('smtp_pass','') }}" placeholder="••••••••"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Absender-Name</label>
+            <input name="smtp_from_name" value="{{ cfg.get('smtp_from_name','') }}" placeholder="IT-Support"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Absender-E-Mail</label>
+            <input name="smtp_from_email" value="{{ cfg.get('smtp_from_email','') }}" placeholder="support@firma.de"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+        <div class="bg-blue-50 rounded-xl p-3 text-xs text-blue-600">
+          <strong>Gmail:</strong> Konto → Sicherheit → App-Passwörter. <strong>Outlook:</strong> smtp.office365.com Port 587.
+        </div>
+      </div>
+      <div class="flex gap-3 mt-4">
+        <button type="submit" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Test -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5 max-w-md">
+    <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Verbindung testen</p>
+    <form method="POST" action="{{ url_for('settings_test_smtp') }}" class="flex gap-2">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input name="test_email" type="email" placeholder="test@beispiel.de" required
+             class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <button type="submit" class="bg-gray-700 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 transition-colors whitespace-nowrap">
+        Test-Mail senden
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════ TAB: IMAP ══════════════ -->
+<div id="pane-imap" class="tab-pane hidden">
+  <form method="POST" action="{{ url_for('settings') }}#imap">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_tab" value="imap">
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6 max-w-xl mb-5">
+      <div class="flex items-center gap-2 mb-1">
+        <svg class="w-4 h-4 text-[#1c3461]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+        <p class="text-sm font-semibold text-gray-700">E-Mail Eingang (IMAP)</p>
+      </div>
+      <p class="text-xs text-gray-400 mb-4">Ungelesene E-Mails werden alle 5 Minuten geprüft und automatisch als Ticket erstellt.</p>
+
+      <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200 mb-4">
+        <label class="flex items-center gap-2 cursor-pointer flex-1">
+          <input type="checkbox" name="imap_enabled" value="1" {% if cfg.get('imap_enabled')=='1' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]"
+                 onchange="document.getElementById('imap-fields').classList.toggle('opacity-40',!this.checked);
+                           document.getElementById('imap-fields').classList.toggle('pointer-events-none',!this.checked)">
+          <span class="text-sm font-medium text-gray-700">IMAP aktivieren</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="imap_auto_ticket" value="1" {% if cfg.get('imap_auto_ticket')=='1' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]">
+          <span class="text-xs text-gray-500">Auto-Ticket aus E-Mail</span>
+        </label>
+      </div>
+
+      <div id="imap-fields" class="space-y-3 {% if cfg.get('imap_enabled') != '1' %}opacity-40 pointer-events-none{% endif %}">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-400 mb-1">IMAP Host</label>
+            <input name="imap_host" value="{{ cfg.get('imap_host','') }}" placeholder="imap.gmail.com"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Port</label>
+            <input name="imap_port" value="{{ cfg.get('imap_port','993') }}"
+                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Benutzername / E-Mail</label>
+          <input name="imap_user" value="{{ cfg.get('imap_user','') }}" placeholder="support@firma.de"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Passwort / App-Passwort</label>
+          <input name="imap_pass" type="password" value="{{ cfg.get('imap_pass','') }}" placeholder="••••••••"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Ordner (Standard: INBOX)</label>
+          <input name="imap_folder" value="{{ cfg.get('imap_folder','INBOX') }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-4">
+        <button type="submit" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Manueller Check -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5 max-w-xl">
+    <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Postfach jetzt prüfen</p>
+    <p class="text-xs text-gray-500 mb-3">Prüft sofort auf ungelesene E-Mails und erstellt Tickets. Der automatische Job läuft alle <strong>2 Minuten</strong>.</p>
+    <form method="POST" action="{{ url_for('settings_imap_check') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              class="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Jetzt auf E-Mails prüfen
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+const TABS = ['allgemein','firma','smtp','imap'];
+
+function switchTab(id) {
+  TABS.forEach(t => {
+    document.getElementById('pane-' + t).classList.toggle('hidden', t !== id);
+    const btn = document.getElementById('tab-' + t);
+    if (t === id) {
+      btn.classList.add('bg-white','text-[#1c3461]','shadow-sm','font-semibold');
+      btn.classList.remove('text-gray-500');
+    } else {
+      btn.classList.remove('bg-white','text-[#1c3461]','shadow-sm','font-semibold');
+      btn.classList.add('text-gray-500');
+    }
+  });
+  history.replaceState(null,'','#' + id);
+}
+
+// Activate tab from URL hash or default
+const hash = location.hash.replace('#','');
+switchTab(TABS.includes(hash) ? hash : 'allgemein');
+</script>
+{% endblock %}

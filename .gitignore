@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Data / DB (nicht in Git)
+itool/data/
+
+# Secrets
+.env
+itool/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporäre Claude-Dateien
+.claude/
+UsersSYSEXP~1AppDataLocalTemppylibs/

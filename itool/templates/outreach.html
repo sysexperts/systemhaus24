@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Akquise – tkToolkit{% endblock %}
+{% block content %}
+
+<h1 class="text-lg font-semibold text-gray-600 mb-5">Akquise</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+  <!-- Compose -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-4">Anschreiben erstellen</p>
+    <form method="POST" action="{{ url_for('outreach_send') }}" class="space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Leads auswählen</label>
+        <div class="bg-gray-50 border border-gray-200 rounded-xl max-h-44 overflow-y-auto p-2 space-y-1">
+          {% for lead in leads %}
+          <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-white rounded-lg cursor-pointer text-sm transition-colors">
+            <input type="checkbox" name="customer_ids" value="{{ lead.id }}" class="rounded border-gray-300 text-[#1c3461]">
+            <span class="font-medium text-gray-700">{{ lead.name }}</span>
+            {% if lead.company %}<span class="text-gray-400 text-xs">– {{ lead.company }}</span>{% endif %}
+            {% if lead.email %}<span class="text-gray-400 text-xs ml-auto">{{ lead.email }}</span>{% endif %}
+          </label>
+          {% else %}
+          <p class="text-gray-400 text-sm text-center py-4">
+            Keine Leads vorhanden.<br>
+            <a href="{{ url_for('customer_new') }}" class="text-[#1c3461] hover:underline font-medium">Neuen Lead anlegen</a>
+          </p>
+          {% endfor %}
+        </div>
+        {% if leads %}
+        <label class="flex items-center gap-2 mt-2 text-xs text-gray-500 cursor-pointer">
+          <input type="checkbox" id="selectAll" onchange="toggleAll(this)" class="rounded border-gray-300"> Alle auswählen
+        </label>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Betreff</label>
+        <input name="subject" required placeholder="z.B. IT-Support für Ihr Unternehmen"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Nachricht</label>
+        <textarea name="body" rows="6" required placeholder="Sehr geehrte Damen und Herren,..."
+                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      </div>
+      <button type="submit"
+              class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+        Anschreiben speichern
+      </button>
+    </form>
+  </div>
+
+  <!-- History -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-4">Verlauf</p>
+    {% if history %}
+    <div class="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+      {% for h in history %}
+      <div class="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
+        <div class="flex justify-between items-start mb-1">
+          <span class="font-medium text-sm text-gray-800">{{ h.customer_name }}</span>
+          <span class="text-xs text-gray-400 shrink-0 ml-2">{{ h.sent_at[:10] }}</span>
+        </div>
+        <div class="text-xs text-[#1c3461] font-medium mb-1">{{ h.subject }}</div>
+        <div class="text-xs text-gray-500 line-clamp-2 leading-relaxed">{{ h.body }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center text-gray-400 text-sm mt-12">
+      <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      Noch keine Anschreiben vorhanden.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function toggleAll(cb) {
+  document.querySelectorAll('input[name="customer_ids"]').forEach(el => el.checked = cb.checked);
+}
+</script>
+{% endblock %}

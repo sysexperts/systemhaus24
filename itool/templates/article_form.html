@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Leistung bearbeiten' if article else 'Neue Leistung' }} – tkToolkit{% endblock %}
+{% block content %}
+
+{% set a = article %}
+<div class="max-w-2xl">
+  <h1 class="text-lg font-semibold text-gray-600 mb-5">{{ 'Leistung bearbeiten' if a else 'Neue Leistung' }}</h1>
+
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+    <form method="POST" class="space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Artikelnummer</label>
+          <input name="article_number" value="{{ a.article_number if a else art_nr or '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Kategorie</label>
+          <select name="category" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            {% for cat in ['Dienstleistung','Hardware','Software / Lizenz','Wartung','Sonstiges'] %}
+            <option value="{{ cat }}" {% if a and a.category==cat %}selected{% elif not a and cat=='Dienstleistung' %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Bezeichnung *</label>
+        <input name="name" value="{{ a.name if a else '' }}" required autofocus
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Beschreibung</label>
+        <textarea name="description" rows="3" placeholder="Kurze Leistungsbeschreibung für die Rechnung..."
+                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none">{{ a.description if a else '' }}</textarea>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Einheit</label>
+          <select name="unit" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            {% for u in ['Stunde','Tag','Stück','Monat','Pauschal','Lizenz','GB','Sonstiges'] %}
+            <option value="{{ u }}" {% if a and a.unit==u %}selected{% elif not a and u=='Stunde' %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Netto-Preis (€)</label>
+          <input name="unit_price" type="number" step="0.01" min="0"
+                 value="{{ '%.2f'|format(a.unit_price) if a else '0.00' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Steuersatz</label>
+          <select name="tax_rate" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            {% for rate in [19, 7, 0] %}
+            <option value="{{ rate }}" {% if a and a.tax_rate==rate %}selected{% elif not a and rate==19 %}selected{% endif %}>{{ rate }} %</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-1">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="active" value="1" {% if not a or a.active %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]">
+          <span class="text-sm text-gray-600">Aktiv (in Rechnungen verwendbar)</span>
+        </label>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          Speichern
+        </button>
+        <a href="{{ url_for('articles') }}" class="px-6 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">
+          Abbrechen
+        </a>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}

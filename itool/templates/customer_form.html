@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Kunde bearbeiten' if customer else 'Neuer Kunde' }} – tkToolkit{% endblock %}
+{% block content %}
+
+{% set c = customer %}
+<div>
+  <h1 class="text-lg font-semibold text-gray-600 mb-5">{{ 'Kunde bearbeiten' if c else 'Neuer Kunde' }}</h1>
+  <form method="POST" class="space-y-5">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <!-- 1. Stammdaten -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Stammdaten</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Kundennummer</label>
+          <input name="customer_number" value="{{ c.customer_number if c and c.customer_number else kd_nr or '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Status</label>
+          <select name="status" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="lead"     {% if not c or c.status=='lead'     %}selected{% endif %}>Lead</option>
+            <option value="customer" {% if c and c.status=='customer' %}selected{% endif %}>Kunde</option>
+            <option value="inactive" {% if c and c.status=='inactive' %}selected{% endif %}>Inaktiv</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Herkunft</label>
+          <select name="source" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="">– Bitte wählen –</option>
+            {% for s in ['Empfehlung','Online / Website','Messe','Kaltakquise','Social Media','Bestandskunde'] %}
+            <option value="{{ s }}" {% if c and c.source==s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4 mt-4">
+        <div class="col-span-2">
+          <label class="block text-xs text-gray-400 mb-1">Firmenname *</label>
+          <input name="company" value="{{ c.company if c else '' }}" required
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Rechtsform</label>
+          <select name="legal_form" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="">– Bitte wählen –</option>
+            {% for lf in ['GmbH','UG (haftungsbeschränkt)','AG','GbR','OHG','KG','GmbH & Co. KG','Einzelunternehmen','Kleingewerbe','Freiberufler','e.V.'] %}
+            <option value="{{ lf }}" {% if c and c.legal_form==lf %}selected{% endif %}>{{ lf }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4 mt-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Ansprechpartner (Name) *</label>
+          <input name="name" value="{{ c.name if c else '' }}" required
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">USt-IdNr. / Steuernr.</label>
+          <input name="tax_id" value="{{ c.tax_id if c else '' }}" placeholder="DE123456789"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Website</label>
+          <input name="website" value="{{ c.website if c else '' }}" placeholder="https://..."
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Adresse & Kontakt -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Adresse & Kontakt</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-3">
+          <label class="block text-xs text-gray-400 mb-1">Straße & Hausnummer</label>
+          <input name="street" value="{{ c.street if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">PLZ</label>
+          <input name="zip" value="{{ c.zip if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Ort</label>
+          <input name="city" value="{{ c.city if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Land</label>
+          <input name="country" value="{{ c.country if c else 'Deutschland' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4 mt-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Zentrale E-Mail</label>
+          <input name="email" type="email" value="{{ c.email if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Zentrale Telefon</label>
+          <input name="phone" value="{{ c.phone if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Zahlungskonditionen</label>
+          <select name="payment_terms" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            {% for pt in ['Sofort','7 Tage netto','14 Tage netto','30 Tage netto','Nach Vereinbarung'] %}
+            <option value="{{ pt }}" {% if c and c.payment_terms==pt %}selected{% elif not c and pt=='14 Tage netto' %}selected{% endif %}>{{ pt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Ansprechpartner -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Ansprechpartner</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Name</label>
+          <input name="contact_person" value="{{ c.contact_person if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Position / Funktion</label>
+          <input name="contact_position" value="{{ c.contact_position if c else '' }}" placeholder="z.B. IT-Leiter"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">E-Mail</label>
+          <input name="contact_email" type="email" value="{{ c.contact_email if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Telefon (Durchwahl)</label>
+          <input name="contact_phone" value="{{ c.contact_phone if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Mobil</label>
+          <input name="contact_mobile" value="{{ c.contact_mobile if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Vertrag & Support -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Vertrag & Support</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Vertragsart</label>
+          <select name="contract_type" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="">– Bitte wählen –</option>
+            {% for ct in ['Wartungsvertrag','Supportvertrag','Managed Service','Projektarbeit','Ad-hoc / Einzelleistung'] %}
+            <option value="{{ ct }}" {% if c and c.contract_type==ct %}selected{% endif %}>{{ ct }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Support-Level</label>
+          <select name="support_level" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="">– Bitte wählen –</option>
+            {% for sl in ['Basic (8×5)','Standard (8×5 + Remote)','Premium (24×7)'] %}
+            <option value="{{ sl }}" {% if c and c.support_level==sl %}selected{% endif %}>{{ sl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Monatliche Pauschale (€)</label>
+          <input name="monthly_rate" type="number" step="0.01" value="{{ c.monthly_rate if c and c.monthly_rate else '' }}" placeholder="0.00"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Vertragsbeginn</label>
+          <input name="contract_start" type="date" value="{{ c.contract_start if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Vertragsende</label>
+          <input name="contract_end" type="date" value="{{ c.contract_end if c else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. IT-Infrastruktur -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">IT-Infrastruktur</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Anzahl Arbeitsplätze</label>
+          <input name="num_workstations" type="number" min="0" value="{{ c.num_workstations if c and c.num_workstations else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Anzahl Server</label>
+          <input name="num_servers" type="number" min="0" value="{{ c.num_servers if c and c.num_servers else '' }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+      <div class="mt-4">
+        <label class="block text-xs text-gray-400 mb-1">IT-Infrastruktur / Umgebung (Betriebssysteme, Software, Besonderheiten)</label>
+        <textarea name="it_notes" rows="3" placeholder="z.B. Windows Server 2022, 15x Windows 11, Office 365, Firewall Sophos XG..."
+                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none">{{ c.it_notes if c else '' }}</textarea>
+      </div>
+    </div>
+
+    <!-- 6. Notizen -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Interne Notizen</p>
+      <textarea name="notes" rows="3" placeholder="Interne Anmerkungen zum Kunden..."
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none">{{ c.notes if c else '' }}</textarea>
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+        Speichern
+      </button>
+      <a href="{{ url_for('customers') }}" class="px-6 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-white/60 transition-colors">
+        Abbrechen
+      </a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

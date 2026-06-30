@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Ticket bearbeiten' if ticket else 'Neues Ticket' }} – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="max-w-xl">
+  <h1 class="text-lg font-semibold text-gray-600 mb-5">{{ 'Ticket bearbeiten' if ticket else 'Neues Ticket' }}</h1>
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+    <form method="POST" class="space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Titel *</label>
+        <input name="title" value="{{ ticket.title if ticket else '' }}" required autofocus
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Beschreibung</label>
+        <textarea name="description" rows="4"
+                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">{{ ticket.description if ticket else '' }}</textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Kunde</label>
+        <select name="customer_id" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+          <option value="">– Kein Kunde –</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" {% if ticket and ticket.customer_id==c.id %}selected{% endif %}>
+            {{ c.name }}{% if c.company %} ({{ c.company }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Priorität</label>
+          <select name="priority" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="low"    {% if ticket and ticket.priority=='low'    %}selected{% endif %}>Niedrig</option>
+            <option value="medium" {% if not ticket or ticket.priority=='medium' %}selected{% endif %}>Mittel</option>
+            <option value="high"   {% if ticket and ticket.priority=='high'   %}selected{% endif %}>Hoch</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1.5">Status</label>
+          <select name="status" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none">
+            <option value="open"        {% if not ticket or ticket.status=='open'        %}selected{% endif %}>Offen</option>
+            <option value="in_progress" {% if ticket and ticket.status=='in_progress' %}selected{% endif %}>In Arbeit</option>
+            <option value="closed"      {% if ticket and ticket.status=='closed'      %}selected{% endif %}>Gelöst</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+        <a href="{{ url_for('tickets') }}" class="px-5 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">Abbrechen</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

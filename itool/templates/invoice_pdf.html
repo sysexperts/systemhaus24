@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 2cm 2.2cm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
+
+  /* Header: two-column table */
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 1.2cm; }
+  .header-table td { vertical-align: top; padding: 0; }
+  .header-table td.right { text-align: right; }
+
+  .company-name { font-size: 13pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
+  .company-details { font-size: 8.5pt; color: #666; line-height: 1.6; }
+
+  .invoice-title { font-size: 22pt; font-weight: bold; color: #1c3461; letter-spacing: 2pt; }
+  .meta-table { border-collapse: collapse; margin-top: 6pt; margin-left: auto; }
+  .meta-table td { padding: 1.5pt 0; font-size: 9pt; }
+  .meta-table td.label { color: #999; padding-right: 14pt; }
+  .meta-table td.value { color: #444; font-weight: bold; }
+
+  /* Bill-to */
+  .bill-to { margin-bottom: 1cm; }
+  .bill-label { font-size: 7.5pt; color: #aaa; text-transform: uppercase; letter-spacing: 1pt; margin-bottom: 4pt; }
+  .bill-name { font-weight: bold; font-size: 11pt; color: #222; margin-bottom: 2pt; }
+  .bill-sub { font-size: 9pt; color: #555; line-height: 1.6; }
+
+  /* Divider */
+  .divider { border: none; border-top: 2px solid #1c3461; margin-bottom: 0.5cm; }
+
+  /* Items table */
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 0.8cm; }
+  .items-table th { padding: 5pt 4pt; font-size: 8pt; color: #888; text-transform: uppercase; letter-spacing: 0.5pt; font-weight: bold; text-align: right; border-bottom: 1px solid #ddd; }
+  .items-table th.left { text-align: left; }
+  .items-table td { padding: 6pt 4pt; font-size: 9.5pt; border-bottom: 1px solid #f0f0f0; }
+  .items-table td.right { text-align: right; color: #555; }
+  .items-table td.total-col { text-align: right; font-weight: bold; color: #222; }
+
+  /* Totals */
+  .totals-table { border-collapse: collapse; margin-left: auto; width: 260pt; }
+  .totals-table td { padding: 3pt 4pt; font-size: 9.5pt; }
+  .totals-table td.lbl { text-align: right; color: #777; padding-right: 12pt; }
+  .totals-table td.val { text-align: right; color: #555; }
+  .totals-table tr.grand td { border-top: 2px solid #1c3461; padding-top: 6pt; font-weight: bold; font-size: 11pt; }
+  .totals-table tr.grand td.lbl { color: #333; }
+  .totals-table tr.grand td.val { color: #1c3461; }
+
+  /* Notes */
+  .notes { font-size: 9pt; color: #666; margin-top: 0.5cm; border-top: 1px solid #eee; padding-top: 0.5cm; }
+
+  /* Kleingewerbe notice */
+  .kg-notice { font-size: 8.5pt; color: #555; border: 1px solid #ddd; background: #fafafa;
+               padding: 6pt 10pt; margin-top: 0.6cm; }
+
+  /* Payment info */
+  .payment-info { font-size: 8.5pt; color: #666; margin-top: 0.6cm; border-top: 1px solid #eee; padding-top: 0.4cm; }
+
+  /* Logo */
+  .logo { max-height: 50pt; max-width: 150pt; }
+</style>
+</head>
+<body>
+{% set kleingewerbe = cfg.get('company_kleingewerbe') == '1' %}
+
+<!-- Header -->
+<table class="header-table">
+  <tr>
+    <td style="width:55%">
+      {% if cfg.get('invoice_logo_ext') %}
+      <img src="file://{{ doc_store }}/invoice_logo.{{ cfg.get('invoice_logo_ext') }}" class="logo"><br>
+      {% elif cfg.get('company_logo_ext') %}
+      <img src="file://{{ doc_store }}/logo.{{ cfg.get('company_logo_ext') }}" class="logo"><br>
+      {% endif %}
+      <div class="company-name">{{ cfg.get('company_name','Ihre Firma') }}</div>
+      <div class="company-details">
+        {% if cfg.get('company_street') %}{{ cfg.get('company_street') }}<br>{% endif %}
+        {% if cfg.get('company_zip') or cfg.get('company_city') %}{{ cfg.get('company_zip','') }} {{ cfg.get('company_city','') }}<br>{% endif %}
+        {% if cfg.get('company_phone') %}Tel: {{ cfg.get('company_phone') }}<br>{% endif %}
+        {% if cfg.get('company_email') %}{{ cfg.get('company_email') }}<br>{% endif %}
+        {% if cfg.get('company_tax_id') %}Steuernr.: {{ cfg.get('company_tax_id') }}{% endif %}
+      </div>
+    </td>
+    <td class="right" style="width:45%">
+      <div class="invoice-title">RECHNUNG</div>
+      <table class="meta-table">
+        <tr><td class="label">Rechnungsnr.</td><td class="value">{{ invoice.number }}</td></tr>
+        <tr><td class="label">Datum</td><td class="value">{{ invoice.date }}</td></tr>
+        {% if invoice.due_date %}<tr><td class="label">Fällig bis</td><td class="value">{{ invoice.due_date }}</td></tr>{% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<!-- Bill-to -->
+<div class="bill-to">
+  <div class="bill-label">Rechnungsempfänger</div>
+  <div class="bill-name">{{ invoice.customer_company or invoice.customer_name }}</div>
+  <div class="bill-sub">
+    {% if invoice.customer_company %}{{ invoice.customer_name }}<br>{% endif %}
+    {% if invoice.street %}{{ invoice.street }}<br>{% endif %}
+    {% if invoice.zip or invoice.city %}{{ invoice.zip or '' }} {{ invoice.city or '' }}<br>{% endif %}
+    {% if invoice.customer_tax_id %}USt-IdNr.: {{ invoice.customer_tax_id }}{% endif %}
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Items -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th class="left" style="width:24pt">Pos.</th>
+      <th class="left">Beschreibung</th>
+      <th style="width:50pt">Menge</th>
+      <th style="width:65pt">Einzelpreis</th>
+      <th style="width:70pt">Gesamt</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for item in items %}
+  <tr>
+    <td class="right">{{ loop.index }}</td>
+    <td>{{ item.description }}</td>
+    <td class="right">{{ item.quantity }}</td>
+    <td class="right">{{ '%.2f'|format(item.unit_price) }} €</td>
+    <td class="total-col">{{ '%.2f'|format(item.quantity * item.unit_price) }} €</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<!-- Totals -->
+<table class="totals-table">
+  <tr>
+    <td class="lbl">Nettobetrag</td>
+    <td class="val">{{ '%.2f'|format(total) }} €</td>
+  </tr>
+  {% if kleingewerbe %}
+  <tr>
+    <td class="lbl" style="font-size:8pt">Umsatzsteuer (§19 UStG)</td>
+    <td class="val" style="font-size:8pt">entfällt</td>
+  </tr>
+  <tr class="grand">
+    <td class="lbl">Gesamtbetrag</td>
+    <td class="val">{{ '%.2f'|format(total) }} €</td>
+  </tr>
+  {% else %}
+  <tr>
+    <td class="lbl">zzgl. 19% MwSt.</td>
+    <td class="val">{{ '%.2f'|format(total * 0.19) }} €</td>
+  </tr>
+  <tr class="grand">
+    <td class="lbl">Gesamtbetrag (brutto)</td>
+    <td class="val">{{ '%.2f'|format(total * 1.19) }} €</td>
+  </tr>
+  {% endif %}
+</table>
+
+{% if invoice.notes %}
+<div class="notes">{{ invoice.notes }}</div>
+{% endif %}
+
+{% if kleingewerbe %}
+<div class="kg-notice">
+  Gemäß §19 UStG (Kleinunternehmerregelung) wird keine Umsatzsteuer berechnet.
+</div>
+{% endif %}
+
+{% if cfg.get('company_iban') %}
+<div class="payment-info">
+  <strong>Bankverbindung:</strong>
+  {% if cfg.get('company_bank') %}{{ cfg.get('company_bank') }} &nbsp;&middot;&nbsp; {% endif %}
+  IBAN: {{ cfg.get('company_iban') }}
+  {% if cfg.get('company_bic') %} &nbsp;&middot;&nbsp; BIC: {{ cfg.get('company_bic') }}{% endif %}
+</div>
+{% endif %}
+
+</body>
+</html>

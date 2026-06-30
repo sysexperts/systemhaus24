@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}Buchhaltung{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-xl font-bold text-gray-800">Buchhaltung</h1>
+    <p class="text-xs text-gray-400 mt-0.5">{{ now.strftime('%B %Y') }}
+      {% if is_kg %} · Kleinunternehmerregelung §19 UStG{% endif %}
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{{ url_for('accounting_export_csv') }}"
+       class="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 text-sm px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors shadow-sm font-medium">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+      </svg>
+      CSV Export
+    </a>
+    <a href="{{ url_for('invoice_new') }}"
+       class="flex items-center gap-2 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Neue Rechnung
+    </a>
+  </div>
+</div>
+
+<!-- KPI Row -->
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+  <div class="bg-gradient-to-br from-[#1c3461] to-[#2a4a8a] rounded-2xl p-5 shadow-md relative overflow-hidden">
+    <div class="absolute -right-4 -top-4 w-20 h-20 bg-white/5 rounded-full"></div>
+    <p class="text-blue-200 text-xs font-medium uppercase tracking-wider mb-1">Umsatz Monat</p>
+    <p class="text-3xl font-bold text-white">{{ '%.2f'|format(brutto(stats.revenue_month)) }} €</p>
+    <p class="text-blue-300 text-xs mt-1">{{ stats.count_paid_month }} Rechnungen bezahlt{% if not is_kg %} · brutto{% endif %}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <p class="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1">Umsatz {{ now.year }}</p>
+    <p class="text-3xl font-bold text-gray-800">{{ '%.2f'|format(brutto(stats.revenue_year)) }} €</p>
+    <p class="text-gray-400 text-xs mt-1">Jahresumsatz{% if not is_kg %} brutto{% endif %}</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-red-100 shadow-sm p-5">
+    <p class="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1">Ausstehend</p>
+    <p class="text-3xl font-bold text-red-500">{{ '%.2f'|format(brutto(stats.outstanding)) }} €</p>
+    <p class="text-gray-400 text-xs mt-1">{{ stats.count_sent }} Rechnung(en) offen</p>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <p class="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1">Entwürfe</p>
+    <p class="text-3xl font-bold text-gray-400">{{ '%.2f'|format(brutto(stats.draft_total)) }} €</p>
+    <p class="text-gray-400 text-xs mt-1">{{ stats.count_draft }} noch nicht gesendet</p>
+  </div>
+</div>
+
+<!-- EÜR / Gewinn-Verlust -->
+{% if expenses_total is defined %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+    <p class="text-emerald-600 text-xs font-medium uppercase tracking-wider mb-1">Einnahmen ({{ now.year }})</p>
+    <p class="text-2xl font-bold text-emerald-700">{{ '%.2f'|format(brutto(stats.revenue_year)) }} €</p>
+  </div>
+  <div class="bg-red-50 border border-red-200 rounded-2xl p-5">
+    <p class="text-red-600 text-xs font-medium uppercase tracking-wider mb-1">Ausgaben ({{ now.year }})</p>
+    <p class="text-2xl font-bold text-red-600">{{ '%.2f'|format(expenses_total) }} €</p>
+  </div>
+  <div class="{% if brutto(stats.revenue_year) - expenses_total >= 0 %}bg-blue-50 border-blue-200{% else %}bg-orange-50 border-orange-200{% endif %} border rounded-2xl p-5">
+    <p class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">Gewinn / Verlust</p>
+    {% set profit = brutto(stats.revenue_year) - expenses_total %}
+    <p class="text-2xl font-bold {% if profit >= 0 %}text-blue-700{% else %}text-orange-600{% endif %}">
+      {{ '%.2f'|format(profit) }} €
+    </p>
+  </div>
+</div>
+{% endif %}
+
+<!-- EÜR Hinweis -->
+{% if is_kg %}
+<div class="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-5 flex items-center gap-3">
+  <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <p class="text-sm text-amber-800">
+    <strong>Kleinunternehmerregelung aktiv (§19 UStG)</strong> — alle Beträge sind Nettobeträge, keine Umsatzsteuer wird ausgewiesen.
+  </p>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- Monatsverlauf -->
+  <div class="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-[#1c3461]"></div>
+        <h2 class="text-sm font-semibold text-gray-700">Monatsverlauf (12 Monate)</h2>
+      </div>
+    </div>
+    {% if monthly %}
+    {% set month_names = {'01':'Jan','02':'Feb','03':'Mär','04':'Apr','05':'Mai','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Okt','11':'Nov','12':'Dez'} %}
+    <div class="px-5 pt-4 pb-3">
+      <canvas id="revenueChart" height="160"></canvas>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+        <p class="text-xs text-gray-400">Umsatz ({{ 'Brutto' if not is_kg else 'Netto' }}) · letzte {{ monthly|length }} Monate</p>
+        <p class="text-xs font-semibold text-gray-700">Gesamt: {{ '%.2f'|format(brutto(monthly|sum(attribute='total'))) }} €</p>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script>
+    (function(){
+      const labels = [{% for m in monthly %}"{{ month_names[m.month[5:]] }} '{{ m.month[2:4] }}"{% if not loop.last %},{% endif %}{% endfor %}];
+      const data   = [{% for m in monthly %}{{ "%.2f"|format(brutto(m.total)) }}{% if not loop.last %},{% endif %}{% endfor %}];
+      const ctx = document.getElementById('revenueChart').getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 220);
+      grad.addColorStop(0,   'rgba(28,52,97,0.18)');
+      grad.addColorStop(1,   'rgba(28,52,97,0)');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            borderColor: '#1c3461',
+            borderWidth: 2.5,
+            pointBackgroundColor: '#1c3461',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            fill: true,
+            backgroundColor: grad,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ' ' + ctx.parsed.y.toFixed(2).replace('.', ',') + ' €'
+              },
+              backgroundColor: '#1c3461',
+              titleColor: '#93c5fd',
+              bodyColor: '#fff',
+              padding: 10,
+              cornerRadius: 10
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: '#9ca3af', font: { size: 11 } }
+            },
+            y: {
+              grid: { color: '#f3f4f6' },
+              border: { dash: [4,4] },
+              ticks: {
+                color: '#9ca3af',
+                font: { size: 11 },
+                callback: v => v.toLocaleString('de-DE') + ' €'
+              }
+            }
+          }
+        }
+      });
+    })();
+    </script>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-14 text-gray-300 gap-2">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <span class="text-sm">Noch keine abgerechneten Monate</span>
+    </div>
+    {% endif %}
+
+    <!-- Offene Rechnungen -->
+    {% if unpaid %}
+    <div class="border-t border-gray-50">
+      <div class="px-5 py-3 flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-red-400"></div>
+        <h2 class="text-sm font-semibold text-gray-700">Offene Rechnungen</h2>
+      </div>
+      <div class="divide-y divide-gray-50">
+        {% for inv in unpaid %}
+        <a href="{{ url_for('invoice_view', iid=inv.id) }}"
+           class="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors group">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-gray-500">{{ inv.number }}</p>
+            <p class="text-sm font-medium text-gray-700 truncate">{{ inv.customer_company or inv.customer_name or '–' }}</p>
+          </div>
+          {% if inv.due_date %}
+          <div class="text-right shrink-0">
+            {% if inv.overdue_days and inv.overdue_days > 0 %}
+            <p class="text-xs font-semibold text-red-500">{{ inv.overdue_days }} Tage überfällig</p>
+            {% else %}
+            <p class="text-xs text-gray-400">Fällig {{ inv.due_date }}</p>
+            {% endif %}
+          </div>
+          {% endif %}
+          <p class="text-sm font-bold text-gray-800 shrink-0">{{ '%.2f'|format(brutto(inv.total)) }} €</p>
+          <form method="POST" action="{{ url_for('invoice_status', iid=inv.id, status='paid') }}"
+                onclick="event.stopPropagation()">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition-colors font-medium whitespace-nowrap">
+              Als bezahlt
+            </button>
+          </form>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Rechte Spalte -->
+  <div class="flex flex-col gap-5">
+
+    <!-- Top Kunden -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+        <h2 class="text-sm font-semibold text-gray-700">Top Kunden</h2>
+      </div>
+      {% if top_customers %}
+      <div class="divide-y divide-gray-50">
+        {% set max_cust = top_customers[0].total %}
+        {% for c in top_customers %}
+        <div class="px-5 py-3">
+          <div class="flex justify-between mb-1">
+            <span class="text-sm font-medium text-gray-700 truncate">{{ c.company or c.name }}</span>
+            <span class="text-sm font-bold text-gray-800 ml-2 shrink-0">{{ '%.0f'|format(brutto(c.total)) }} €</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-1.5">
+            <div class="bg-emerald-500 h-1.5 rounded-full" style="width:{{ (c.total / max_cust * 100)|round }}%"></div>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">{{ c.invoice_count }} Rechnung(en)</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-300 text-center py-6">Keine Daten</p>
+      {% endif %}
+    </div>
+
+    <!-- Zuletzt bezahlt -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-green-400"></div>
+        <h2 class="text-sm font-semibold text-gray-700">Zuletzt bezahlt</h2>
+      </div>
+      {% if paid_recent %}
+      <div class="divide-y divide-gray-50">
+        {% for inv in paid_recent %}
+        <a href="{{ url_for('invoice_view', iid=inv.id) }}"
+           class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-gray-400">{{ inv.number }}</p>
+            <p class="text-xs text-gray-500 truncate">{{ inv.customer_company or inv.customer_name or '–' }}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-sm font-semibold text-green-600">{{ '%.2f'|format(brutto(inv.total)) }} €</p>
+            <p class="text-xs text-gray-400">{{ inv.date }}</p>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-300 text-center py-6">Noch keine bezahlten Rechnungen</p>
+      {% endif %}
+    </div>
+
+    <!-- Schnellzugriff -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Schnellzugriff</p>
+      <div class="space-y-2">
+        <a href="{{ url_for('invoices') }}" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm text-gray-600">
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Alle Rechnungen
+        </a>
+        <a href="{{ url_for('time_report') }}" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm text-gray-600">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Zeitauswertung
+        </a>
+        <a href="{{ url_for('accounting_export_csv') }}" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm text-gray-600">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          CSV Export
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Ausgaben (Expenses) -->
+<div class="mt-6">
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full bg-red-400"></div>
+      <h2 class="text-base font-semibold text-gray-700">Ausgaben</h2>
+    </div>
+    <button onclick="document.getElementById('expenseModal').classList.remove('hidden')"
+            class="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2 rounded-xl hover:bg-red-100 transition-colors font-medium">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Ausgabe erfassen
+    </button>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Datum</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kategorie</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Beschreibung</th>
+          <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Netto</th>
+          <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Brutto</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Beleg</th>
+          <th class="px-5 py-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for exp in expenses %}
+      <tr class="border-b border-gray-50 hover:bg-red-50/30 transition-colors">
+        <td class="px-5 py-3 text-gray-500 text-xs">{{ exp.date }}</td>
+        <td class="px-5 py-3">
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{{ exp.category }}</span>
+        </td>
+        <td class="px-5 py-3 text-gray-700">{{ exp.description }}</td>
+        <td class="px-5 py-3 text-right text-gray-600">{{ '%.2f'|format(exp.amount_netto) }} €</td>
+        <td class="px-5 py-3 text-right font-semibold text-red-600">
+          {{ '%.2f'|format(exp.amount_netto * (1 + exp.tax_rate / 100)) }} €
+          <div class="text-xs text-gray-400 font-normal">inkl. {{ exp.tax_rate|int }}% MwSt.</div>
+        </td>
+        <td class="px-5 py-3">
+          {% if exp.receipt_file %}
+          <a href="{{ url_for('expense_receipt', eid=exp.id) }}"
+             class="text-blue-500 hover:underline text-xs flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+            Beleg
+          </a>
+          {% else %}
+          <span class="text-gray-300 text-xs">–</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-3 text-right">
+          <form method="POST" action="{{ url_for('expense_delete', eid=exp.id) }}"
+                onsubmit="return confirm('Ausgabe löschen?')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-red-400 hover:text-red-600 text-xs">Löschen</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="px-5 py-10 text-center text-gray-300 text-sm">Noch keine Ausgaben erfasst.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Neue Ausgabe -->
+<div id="expenseModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="font-semibold text-gray-800">Neue Ausgabe erfassen</h3>
+      <button onclick="document.getElementById('expenseModal').classList.add('hidden')"
+              class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="POST" action="{{ url_for('expense_new') }}" enctype="multipart/form-data" class="p-6 space-y-4">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Datum *</label>
+          <input type="date" name="date" required
+                 value="{{ now.strftime('%Y-%m-%d') }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Kategorie</label>
+          <select name="category"
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+            <option>Software & Lizenzen</option>
+            <option>Hardware</option>
+            <option>Büro & Verbrauch</option>
+            <option>Fahrtkosten</option>
+            <option>Telefon & Internet</option>
+            <option>Versicherung</option>
+            <option>Marketing</option>
+            <option>Steuerberater</option>
+            <option>Sonstiges</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Beschreibung *</label>
+        <input type="text" name="description" required placeholder="z.B. Microsoft 365 Jahresabo"
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Betrag Netto (€) *</label>
+          <input type="number" name="amount_netto" step="0.01" min="0" required placeholder="0.00"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">MwSt. (%)</label>
+          <select name="tax_rate"
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+            <option value="19">19%</option>
+            <option value="7">7%</option>
+            <option value="0">0%</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Beleg hochladen (optional)</label>
+        <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png"
+               class="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1c3461] file:text-white hover:file:bg-[#2a4a8a]">
+        <p class="text-xs text-gray-400 mt-1">PDF, JPG oder PNG · max. 10 MB</p>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Notiz</label>
+        <textarea name="notes" rows="2" placeholder="Interne Anmerkungen..."
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 resize-none"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="flex-1 bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          Speichern
+        </button>
+        <button type="button" onclick="document.getElementById('expenseModal').classList.add('hidden')"
+                class="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
+          Abbrechen
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

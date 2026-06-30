@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+{% set hour = now_hour | default(12) %}
+{% if hour < 12 %}{% set greeting = "Guten Morgen" %}
+{% elif hour < 18 %}{% set greeting = "Guten Tag" %}
+{% else %}{% set greeting = "Guten Abend" %}{% endif %}
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-800">{{ greeting }}, {{ session.get('display_name') or session.get('username') }} 👋</h1>
+    <p class="text-sm text-gray-400 mt-0.5">Hier ist deine Übersicht für heute.</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{{ url_for('customer_new') }}"
+       class="flex items-center gap-1.5 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Neuer Kunde
+    </a>
+    <a href="{{ url_for('ticket_new') }}"
+       class="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors font-medium shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Neues Ticket
+    </a>
+  </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+
+  <!-- Kunden -->
+  <a href="{{ url_for('customers', status='customer') }}"
+     class="group relative overflow-hidden bg-gradient-to-br from-[#1c3461] to-[#2a4a8a] rounded-2xl p-5 shadow-md hover:shadow-lg transition-all">
+    <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full"></div>
+    <div class="absolute -right-2 -bottom-6 w-32 h-32 bg-white/5 rounded-full"></div>
+    <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center mb-4">
+      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    </div>
+    <p class="text-blue-200 text-xs font-medium uppercase tracking-wider mb-1">Kunden</p>
+    <p class="text-4xl font-bold text-white">{{ stats.customers }}</p>
+    <p class="text-blue-300 text-xs mt-1">+ {{ stats.leads }} Leads</p>
+  </a>
+
+  <!-- Tickets -->
+  <a href="{{ url_for('tickets', status='open') }}"
+     class="group relative overflow-hidden bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all">
+    <div class="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center mb-4">
+      <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    </div>
+    <p class="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1">Offene Tickets</p>
+    <p class="text-4xl font-bold text-gray-800">{{ stats.tickets_open }}</p>
+    <p class="text-gray-400 text-xs mt-1">{{ stats.tickets_progress }} in Bearbeitung</p>
+  </a>
+
+  <!-- Unbezahlte Rechnungen -->
+  <a href="{{ url_for('invoices') }}"
+     class="group relative overflow-hidden bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all">
+    <div class="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center mb-4">
+      <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>
+    </div>
+    <p class="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1">Unbezahlt</p>
+    <p class="text-4xl font-bold text-gray-800">{{ stats.invoices_unpaid }}</p>
+    <p class="text-gray-400 text-xs mt-1">{{ stats.invoices_draft }} als Entwurf</p>
+  </a>
+
+  <!-- Umsatz -->
+  <div class="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 shadow-md">
+    <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full"></div>
+    <div class="absolute -right-2 -bottom-6 w-32 h-32 bg-white/5 rounded-full"></div>
+    <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center mb-4">
+      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <p class="text-emerald-100 text-xs font-medium uppercase tracking-wider mb-1">Umsatz (Monat)</p>
+    <p class="text-3xl font-bold text-white">{{ '%.2f'|format(brutto(stats.revenue_month)) }} €</p>
+    <p class="text-emerald-200 text-xs mt-1">Gesamt: {{ '%.2f'|format(brutto(stats.revenue_total)) }} €{% if not is_kg %} brutto{% endif %}</p>
+  </div>
+</div>
+
+<!-- Main content: Tickets + Rechnungen + Quick Actions -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- Offene Tickets (span 2) -->
+  <div class="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-orange-400"></div>
+        <h2 class="text-sm font-semibold text-gray-700">Aktive Tickets</h2>
+      </div>
+      <a href="{{ url_for('tickets') }}" class="text-xs text-blue-500 hover:underline">Alle ansehen →</a>
+    </div>
+    {% if recent_tickets %}
+    <div class="divide-y divide-gray-50">
+      {% for t in recent_tickets %}
+      <a href="{{ url_for('ticket_edit', tid=t.id) }}"
+         class="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/70 transition-colors group">
+        <!-- Priority dot -->
+        <div class="w-2 h-2 rounded-full shrink-0
+          {% if t.priority=='high' %}bg-red-500
+          {% elif t.priority=='medium' %}bg-yellow-400
+          {% else %}bg-gray-300{% endif %}"></div>
+        <!-- Title + customer -->
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-700 group-hover:text-[#1c3461] truncate">{{ t.title }}</p>
+          <p class="text-xs text-gray-400 mt-0.5 truncate">{{ t.customer_name or 'Kein Kunde' }}</p>
+        </div>
+        <!-- Status badge -->
+        <span class="shrink-0 text-xs px-2.5 py-1 rounded-full font-medium
+          {% if t.status=='open' %}bg-blue-50 text-blue-600
+          {% elif t.status=='in_progress' %}bg-amber-50 text-amber-600
+          {% else %}bg-green-50 text-green-600{% endif %}">
+          {{ {'open':'Offen','in_progress':'In Arbeit','closed':'Gelöst'}.get(t.status, t.status) }}
+        </span>
+        <!-- Priority label -->
+        <span class="shrink-0 text-xs text-gray-300
+          {% if t.priority=='high' %}!text-red-400 font-semibold{% endif %}">
+          {{ {'high':'Hoch','medium':'Mittel','low':'Niedrig'}.get(t.priority, '') }}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-12 text-gray-300">
+      <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <p class="text-sm">Keine offenen Tickets</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right column: Quick Actions + Rechnungen -->
+  <div class="flex flex-col gap-5">
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <h2 class="text-sm font-semibold text-gray-700 mb-4">Schnellzugriff</h2>
+      <div class="space-y-2">
+        <a href="{{ url_for('customer_new') }}"
+           class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-blue-50 hover:text-[#1c3461] transition-colors group">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4 text-[#1c3461]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-600 group-hover:text-[#1c3461]">Neuer Kunde</span>
+        </a>
+        <a href="{{ url_for('invoice_new') }}"
+           class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-emerald-50 transition-colors group">
+          <div class="w-8 h-8 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-600 group-hover:text-emerald-700">Neue Rechnung</span>
+        </a>
+        <a href="{{ url_for('ticket_new') }}"
+           class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-orange-50 transition-colors group">
+          <div class="w-8 h-8 rounded-lg bg-orange-100 group-hover:bg-orange-200 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-600 group-hover:text-orange-600">Neues Ticket</span>
+        </a>
+        <a href="{{ url_for('outreach') }}"
+           class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-purple-50 transition-colors group">
+          <div class="w-8 h-8 rounded-lg bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+          </div>
+          <span class="text-sm font-medium text-gray-600 group-hover:text-purple-600">Akquise starten</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Letzte Rechnungen -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex-1">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+          <h2 class="text-sm font-semibold text-gray-700">Letzte Rechnungen</h2>
+        </div>
+        <a href="{{ url_for('invoices') }}" class="text-xs text-blue-500 hover:underline">Alle →</a>
+      </div>
+      {% if recent_invoices %}
+      <div class="divide-y divide-gray-50">
+        {% for inv in recent_invoices %}
+        <a href="{{ url_for('invoice_view', iid=inv.id) }}"
+           class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/70 transition-colors group">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-gray-500">{{ inv.number }}</p>
+            <p class="text-xs text-gray-400 truncate">{{ inv.customer_company or inv.customer_name or '–' }}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-sm font-semibold text-gray-700">{{ '%.2f'|format(brutto(inv.total)) }} €</p>
+            <span class="text-xs px-2 py-0.5 rounded-full
+              {% if inv.status=='paid' %}bg-green-50 text-green-600
+              {% elif inv.status=='sent' %}bg-blue-50 text-blue-600
+              {% else %}bg-gray-100 text-gray-400{% endif %}">
+              {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt'}.get(inv.status, inv.status) }}
+            </span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="flex flex-col items-center justify-center py-8 text-gray-300">
+        <p class="text-sm">Keine Rechnungen</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<script>
+// pass current hour to Jinja via meta tag workaround
+</script>
+{% endblock %}

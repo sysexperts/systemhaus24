@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Rechnung {{ invoice.number }} – tkToolkit{% endblock %}
+{% block content %}
+
+{% set kleingewerbe = cfg.get('company_kleingewerbe') == '1' %}
+{% set company = cfg %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Action bar (hidden on print) -->
+<div class="flex items-center gap-2 mb-5 no-print">
+  <a href="{{ url_for('invoices') }}" class="text-sm text-gray-400 hover:text-gray-600">← Rechnungen</a>
+  <div class="flex-1"></div>
+  {% if invoice.status == 'draft' %}
+  <form method="POST" action="{{ url_for('invoice_status', iid=invoice.id, status='sent') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="px-4 py-2 rounded-xl text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors font-medium">Als gesendet markieren</button>
+  </form>
+  {% elif invoice.status == 'sent' %}
+  <form method="POST" action="{{ url_for('invoice_status', iid=invoice.id, status='paid') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="px-4 py-2 rounded-xl text-sm bg-green-100 text-green-700 hover:bg-green-200 transition-colors font-medium">Als bezahlt markieren</button>
+  </form>
+  {% endif %}
+  <button onclick="window.print()"
+          class="px-4 py-2 rounded-xl text-sm bg-gray-700 text-white hover:bg-gray-800 transition-colors flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+    Drucken / PDF
+  </button>
+  <button onclick="document.getElementById('email-modal').classList.remove('hidden')"
+          class="px-4 py-2 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+    Per E-Mail senden
+  </button>
+</div>
+
+<!-- Invoice document -->
+<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 print-doc" id="invoice-doc">
+
+  <!-- Header -->
+  <div class="flex justify-between items-start mb-10">
+    <div>
+      {% if cfg.get('company_logo_ext') %}
+      <img src="{{ url_for('company_logo') }}" alt="Logo" class="h-14 mb-3 object-contain">
+      {% endif %}
+      <div class="font-bold text-gray-800 text-base">{{ cfg.get('company_name','Ihre Firma') }}</div>
+      {% if cfg.get('company_street') %}<div class="text-sm text-gray-500">{{ cfg.get('company_street') }}</div>{% endif %}
+      {% if cfg.get('company_zip') or cfg.get('company_city') %}
+      <div class="text-sm text-gray-500">{{ cfg.get('company_zip','') }} {{ cfg.get('company_city','') }}</div>
+      {% endif %}
+      {% if cfg.get('company_phone') %}<div class="text-sm text-gray-400">Tel: {{ cfg.get('company_phone') }}</div>{% endif %}
+      {% if cfg.get('company_email') %}<div class="text-sm text-gray-400">{{ cfg.get('company_email') }}</div>{% endif %}
+    </div>
+    <div class="text-right">
+      <div class="text-3xl font-black text-[#1c3461] tracking-widest mb-3">RECHNUNG</div>
+      <table class="text-sm text-right ml-auto">
+        <tr><td class="text-gray-400 pr-4">Rechnungsnr.</td><td class="font-mono font-semibold text-gray-700">{{ invoice.number }}</td></tr>
+        <tr><td class="text-gray-400 pr-4">Datum</td><td class="text-gray-700">{{ invoice.date }}</td></tr>
+        {% if invoice.due_date %}<tr><td class="text-gray-400 pr-4">Fällig bis</td><td class="text-gray-700">{{ invoice.due_date }}</td></tr>{% endif %}
+        {% if cfg.get('company_tax_id') %}<tr><td class="text-gray-400 pr-4">Steuernr.</td><td class="text-gray-600 text-xs">{{ cfg.get('company_tax_id') }}</td></tr>{% endif %}
+      </table>
+      <span class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold
+        {% if invoice.status=='paid' %}bg-green-100 text-green-700
+        {% elif invoice.status=='sent' %}bg-blue-100 text-blue-700
+        {% else %}bg-gray-100 text-gray-500{% endif %}">
+        {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt'}[invoice.status] }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Bill-to -->
+  <div class="mb-8">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Rechnungsempfänger</p>
+    <div class="font-semibold text-gray-800">{{ invoice.customer_company or invoice.customer_name }}</div>
+    {% if invoice.customer_company %}<div class="text-sm text-gray-600">{{ invoice.customer_name }}</div>{% endif %}
+    {% if invoice.street %}<div class="text-sm text-gray-500">{{ invoice.street }}</div>{% endif %}
+    {% if invoice.zip or invoice.city %}<div class="text-sm text-gray-500">{{ invoice.zip or '' }} {{ invoice.city or '' }}</div>{% endif %}
+    {% if invoice.customer_tax_id %}<div class="text-xs text-gray-400 mt-1">USt-IdNr.: {{ invoice.customer_tax_id }}</div>{% endif %}
+  </div>
+
+  <!-- Items -->
+  <table class="w-full text-sm mb-8">
+    <thead>
+      <tr class="border-b-2 border-gray-200">
+        <th class="py-2 text-left text-xs text-gray-400 uppercase tracking-wide">Pos.</th>
+        <th class="py-2 text-left text-xs text-gray-400 uppercase tracking-wide">Beschreibung</th>
+        <th class="py-2 text-right text-xs text-gray-400 uppercase tracking-wide">Menge</th>
+        <th class="py-2 text-right text-xs text-gray-400 uppercase tracking-wide">Einzelpreis</th>
+        <th class="py-2 text-right text-xs text-gray-400 uppercase tracking-wide">Gesamt</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+    <tr class="border-b border-gray-50">
+      <td class="py-3 text-gray-400 text-xs">{{ loop.index }}</td>
+      <td class="py-3 text-gray-700">{{ item.description }}</td>
+      <td class="py-3 text-right text-gray-500">{{ item.quantity }}</td>
+      <td class="py-3 text-right text-gray-500">{{ '%.2f'|format(item.unit_price) }} €</td>
+      <td class="py-3 text-right font-medium text-gray-800">{{ '%.2f'|format(item.quantity * item.unit_price) }} €</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4" class="py-2 text-right text-sm text-gray-500 border-t border-gray-100">Netto</td>
+          <td class="py-2 text-right font-medium text-gray-700 border-t border-gray-100">{{ '%.2f'|format(total) }} €</td></tr>
+      {% if kleingewerbe %}
+      <tr><td colspan="4" class="py-1 text-right text-xs text-gray-400">Umsatzsteuer (§19 UStG)</td>
+          <td class="py-1 text-right text-xs text-gray-400">entfällt</td></tr>
+      {% else %}
+      <tr><td colspan="4" class="py-1 text-right text-sm text-gray-400">zzgl. 19% MwSt.</td>
+          <td class="py-1 text-right text-sm text-gray-400">{{ '%.2f'|format(total * 0.19) }} €</td></tr>
+      {% endif %}
+      <tr class="border-t-2 border-[#1c3461]/20">
+        <td colspan="4" class="py-3 text-right font-bold text-gray-800">Gesamtbetrag</td>
+        <td class="py-3 text-right font-bold text-[#1c3461] text-lg">
+          {{ '%.2f'|format(total if kleingewerbe else total * 1.19) }} €
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {% if invoice.notes %}
+  <div class="border-t border-gray-100 pt-4 text-sm text-gray-500 mb-6">{{ invoice.notes }}</div>
+  {% endif %}
+
+  <!-- Kleingewerbe notice -->
+  {% if kleingewerbe %}
+  <div class="border border-gray-200 rounded-xl p-4 bg-gray-50 text-xs text-gray-500 mb-6">
+    Gemäß §19 UStG (Kleinunternehmerregelung) wird keine Umsatzsteuer berechnet.
+  </div>
+  {% endif %}
+
+  <!-- Payment info -->
+  {% if cfg.get('company_iban') %}
+  <div class="border-t border-gray-100 pt-4 text-xs text-gray-400">
+    <span class="font-semibold text-gray-600">Bankverbindung:</span>
+    {% if cfg.get('company_bank') %}{{ cfg.get('company_bank') }} · {% endif %}
+    IBAN: {{ cfg.get('company_iban') }}
+    {% if cfg.get('company_bic') %} · BIC: {{ cfg.get('company_bic') }}{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Email send log -->
+{% if email_log %}
+<div class="mt-5 bg-white/80 rounded-2xl shadow-sm border border-white p-5 no-print">
+  <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">E-Mail-Versandprotokoll</p>
+  <div class="space-y-2">
+    {% for e in email_log %}
+    <div class="flex items-center gap-3 text-sm">
+      <svg class="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      <span class="text-gray-600">{{ e.sent_at[:16].replace('T',' ') }}</span>
+      <span class="text-gray-400">→</span>
+      <span class="font-medium text-gray-700">{{ e.to_addr }}</span>
+      {% if e.subject %}<span class="text-gray-400 text-xs">· {{ e.subject }}</span>{% endif %}
+      <span class="text-gray-400 text-xs ml-auto">von {{ e.sent_by }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- E-Mail modal -->
+<div id="email-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center no-print">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-semibold text-gray-800">Rechnung per E-Mail senden</h2>
+      <button onclick="document.getElementById('email-modal').classList.add('hidden')"
+              class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="POST" action="{{ url_for('invoice_send_email', iid=invoice.id) }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">An</label>
+        <input name="to_email" type="email" value="{{ invoice.email or '' }}" required placeholder="kunde@beispiel.de"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Betreff</label>
+        <input name="subject" value="Rechnung {{ invoice.number }}"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Nachricht</label>
+        <textarea name="body" rows="6"
+                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none">Guten Tag,
+
+anbei erhalten Sie Rechnung {{ invoice.number }} über {{ '%.2f'|format(total if kleingewerbe else total * 1.19) }} €{% if invoice.due_date %} mit Fälligkeit am {{ invoice.due_date }}{% endif %}.
+
+Bei Rückfragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+{{ cfg.get('company_name','') }}</textarea>
+      </div>
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-700">
+        Hinweis: Die Rechnung wird als Text gesendet. Für PDF-Anhang bitte zuerst drucken und als PDF speichern.
+      </div>
+      <div class="flex gap-3 pt-1">
+        <button type="submit" class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          Senden
+        </button>
+        <button type="button" onclick="document.getElementById('email-modal').classList.add('hidden')"
+                class="flex-1 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">
+          Abbrechen
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+@media print {
+  .no-print { display: none !important; }
+  aside, #sidebar, nav { display: none !important; }
+  body { background: white !important; }
+  .print-doc { box-shadow: none !important; border: none !important; padding: 0 !important; }
+  main { padding: 0 !important; overflow: visible !important; }
+  .flex.flex-1.overflow-hidden { display: block !important; overflow: visible !important; }
+}
+</style>
+{% endblock %}

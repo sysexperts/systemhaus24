@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}tkToolkit{% endblock %}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background-color: #c8d2db; }
+
+  /* Sidebar */
+  #sidebar {
+    width: 64px;
+    transition: width 0.25s cubic-bezier(.4,0,.2,1);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  #sidebar.expanded { width: 220px; }
+  #sidebar .lbl { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+  #sidebar.expanded .lbl { opacity: 1; pointer-events: auto; }
+  #sidebar .submenu { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; }
+  #sidebar.expanded .submenu.open { max-height: 200px; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+</style>
+</head>
+<body class="{% if session.user_id %}flex h-screen overflow-hidden{% else %}min-h-screen{% endif %}">
+
+{% if session.user_id %}
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="bg-[#1c3461] flex flex-col py-4 shrink-0 shadow-xl relative z-20">
+
+    <!-- Logo (immer zentriert, immer sichtbar) -->
+    <div class="flex items-center justify-center px-2 mb-2" style="min-height:44px">
+      {% if app_cfg.get('company_logo_ext') %}
+      <img src="{{ url_for('company_logo') }}" alt="Logo"
+           class="max-h-9 object-contain opacity-90" style="max-width:180px">
+      {% endif %}
+    </div>
+    <div class="mx-3 mb-2 border-t border-white/10"></div>
+
+    <!-- Toggle button -->
+    <button onclick="toggleSidebar()" class="flex items-center gap-3 px-3 py-2 mx-2 mb-2 rounded-xl hover:bg-white/10 transition-colors">
+      <svg class="w-5 h-5 text-white/80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+      <span class="lbl text-xs text-white/60 font-medium">Menü einklappen</span>
+    </button>
+
+    <!-- Dashboard -->
+    <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if request.endpoint=='dashboard' %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
+      <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="lbl text-sm text-white font-medium">Dashboard</span>
+    </a>
+
+    <!-- Kunden -->
+    <div class="mx-2 mb-1">
+      <button onclick="toggleMenu('menu-kunden', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'customer' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <div class="relative shrink-0">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <span class="lbl text-sm text-white font-medium flex-1 text-left">Kunden</span>
+        <svg class="lbl w-3 h-3 text-white/50 shrink-0 menu-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="menu-kunden" class="submenu pl-8 mt-1 space-y-0.5 {% if 'customer' in (request.endpoint or '') %}open{% endif %}">
+        <a href="{{ url_for('customers') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Kunden</a>
+        <a href="{{ url_for('customers', status='customer') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Aktive Kunden</a>
+        <a href="{{ url_for('customers', status='lead') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Leads</a>
+        <a href="{{ url_for('customer_new') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">+ Neuer Kunde</a>
+      </div>
+    </div>
+
+    <!-- Rechnungen -->
+    <div class="mx-2 mb-1">
+      <button onclick="toggleMenu('menu-inv', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'invoice' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors relative">
+        <div class="relative shrink-0">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          {% if invoice_count > 0 %}<span class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">{{ invoice_count }}</span>{% endif %}
+        </div>
+        <span class="lbl text-sm text-white font-medium flex-1 text-left">Rechnungen</span>
+        <svg class="lbl w-3 h-3 text-white/50 shrink-0 menu-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="menu-inv" class="submenu pl-8 mt-1 space-y-0.5 {% if 'invoice' in (request.endpoint or '') %}open{% endif %}">
+        <a href="{{ url_for('invoices') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Rechnungen</a>
+        <a href="{{ url_for('invoice_new') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">+ Neue Rechnung</a>
+      </div>
+    </div>
+
+    <!-- Tickets -->
+    <div class="mx-2 mb-1">
+      <button onclick="toggleMenu('menu-tick', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'ticket' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <div class="relative shrink-0">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+          </svg>
+          {% if ticket_count > 0 %}<span class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">{{ ticket_count }}</span>{% endif %}
+        </div>
+        <span class="lbl text-sm text-white font-medium flex-1 text-left">Tickets</span>
+        <svg class="lbl w-3 h-3 text-white/50 shrink-0 menu-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="menu-tick" class="submenu pl-8 mt-1 space-y-0.5 {% if 'ticket' in (request.endpoint or '') %}open{% endif %}">
+        <a href="{{ url_for('tickets') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Tickets</a>
+        <a href="{{ url_for('tickets', status='open') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Offen</a>
+        <a href="{{ url_for('tickets', status='in_progress') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">In Arbeit</a>
+        <a href="{{ url_for('ticket_new') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">+ Neues Ticket</a>
+      </div>
+    </div>
+
+    <!-- Dokumente -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('documents') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'document' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Dokumente</span>
+      </a>
+    </div>
+
+    <!-- Leistungen -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('articles') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'article' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Leistungen</span>
+      </a>
+    </div>
+
+    <!-- Akquise -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('outreach') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'outreach' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Akquise</span>
+      </a>
+    </div>
+
+    <!-- Promoter (nur Admin) -->
+    {% if session.get('role') != 'promoter' %}
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('promoters') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'promoter' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <div class="relative shrink-0">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+          </svg>
+          {% if payout_count > 0 %}<span class="absolute -top-1 -right-1 bg-amber-400 text-white text-[8px] rounded-full w-3 h-3 flex items-center justify-center font-bold">{{ payout_count }}</span>{% endif %}
+        </div>
+        <span class="lbl text-sm text-white font-medium">Promoter</span>
+        {% if payout_count > 0 %}<span class="lbl ml-auto bg-amber-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{{ payout_count }}</span>{% endif %}
+      </a>
+    </div>
+    {% endif %}
+
+    <!-- Buchhaltung -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('accounting') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'accounting' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M12 7h.01M9 7h.01M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Buchhaltung</span>
+      </a>
+    </div>
+
+    <!-- Zeitauswertung -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('time_report') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'time_report' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Zeitauswertung</span>
+      </a>
+    </div>
+
+    <!-- Einstellungen -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('settings') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'settings' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Einstellungen</span>
+      </a>
+    </div>
+
+    <!-- Bottom -->
+    <div class="mt-auto mx-2 space-y-1">
+      <a href="{{ url_for('backup') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors" title="Backup">
+        <svg class="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        <span class="lbl text-xs text-white/50">Backup</span>
+      </a>
+      <div class="border-t border-white/10 my-1"></div>
+      <!-- User row -->
+      <a href="{{ url_for('settings') }}#allgemein" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors">
+        <div class="w-7 h-7 rounded-full shrink-0 overflow-hidden border-2 border-white/30">
+          {% if current_user_avatar %}
+          <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover">
+          {% else %}
+          <div class="w-full h-full bg-[#2a4a8a] flex items-center justify-center">
+            <span class="text-white text-xs font-bold">{{ session.username[0].upper() }}</span>
+          </div>
+          {% endif %}
+        </div>
+        <span class="lbl text-xs text-white/60 font-medium">{{ session.username }}</span>
+      </a>
+      <a href="{{ url_for('logout') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors" title="Logout">
+        <svg class="w-5 h-5 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        <span class="lbl text-xs text-white/40">Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main area -->
+  <div class="flex flex-col flex-1 overflow-hidden relative z-10">
+
+    <!-- Top nav tabs -->
+    <nav class="px-6 pt-4 flex items-end gap-8 bg-transparent">
+      {% for endpoint_prefix, label, link in [
+        ('customers','Kunden', url_for('customers')),
+        ('invoices','Rechnungen', url_for('invoices')),
+        ('tickets','Tickets', url_for('tickets')),
+        ('article','Leistungen', url_for('articles')),
+        ('document','Dokumente', url_for('documents')),
+        ('outreach','Akquise', url_for('outreach')),
+        ('settings','Einstellungen', url_for('settings')),
+      ] %}
+      {% set active = request.endpoint and endpoint_prefix in request.endpoint %}
+      <a href="{{ link }}" class="pb-3 text-sm font-medium border-b-2 relative whitespace-nowrap
+             {% if active %}border-blue-600 text-blue-700{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+        {{ label }}
+        {% if endpoint_prefix == 'tickets' and ticket_count > 0 %}
+          <span class="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{{ ticket_count }}</span>
+        {% endif %}
+        {% if endpoint_prefix == 'invoices' and invoice_count > 0 %}
+          <span class="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{{ invoice_count }}</span>
+        {% endif %}
+      </a>
+      {% endfor %}
+
+      <!-- Sync countdown (rechts im Nav) -->
+      <div class="ml-auto pb-3 flex items-center gap-1.5" title="Nächste Synchronisierung">
+        <svg width="22" height="22" viewBox="0 0 22 22">
+          <circle cx="11" cy="11" r="9" fill="none" stroke="#d1d5db" stroke-width="2"/>
+          <circle id="sync-arc" cx="11" cy="11" r="9" fill="none" stroke="#3b82f6" stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-dasharray="56.5" stroke-dashoffset="0"
+                  transform="rotate(-90 11 11)"
+                  style="transition: stroke-dashoffset 0.9s linear"/>
+        </svg>
+        <span id="sync-countdown" class="text-[10px] text-gray-400 font-mono w-6">60s</span>
+      </div>
+    </nav>
+    <div class="border-b border-gray-400/40 mx-6"></div>
+
+    <!-- Content + Feed -->
+    <div class="flex flex-1 overflow-hidden">
+      <main class="flex-1 overflow-y-auto p-6">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in messages %}
+            <div class="mb-4 px-4 py-2.5 rounded-xl text-sm shadow-sm
+                        {% if cat=='error' %}bg-red-100 text-red-700 border border-red-200
+                        {% else %}bg-green-100 text-green-700 border border-green-200{% endif %}">
+              {{ msg }}
+            </div>
+          {% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </main>
+
+      <!-- Right team feed -->
+      <aside class="w-72 shrink-0 border-l border-gray-300/50 flex flex-col bg-white/10">
+        <div class="px-4 py-3 border-b border-gray-300/40 flex items-center gap-2">
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+          </svg>
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Team-Feed</span>
+        </div>
+
+        <!-- Messages -->
+        <div id="feed-items" class="flex-1 overflow-y-auto p-3 space-y-2">
+          <div class="text-center text-gray-300 text-xs py-8">Laden…</div>
+        </div>
+
+        <!-- Input -->
+        <div class="p-3 border-t border-gray-300/40 bg-white/5">
+          <form method="POST" action="{{ url_for('feed_send') }}" enctype="multipart/form-data" id="feed-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="flex gap-2 mb-2">
+              <input name="body" id="feed-input" placeholder="Nachricht schreiben..." autocomplete="off"
+                     class="flex-1 bg-white/80 border border-gray-300/60 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
+              <button type="submit" class="bg-[#1c3461] text-white px-3 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
+            </div>
+            <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-600">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+              <span id="file-label">Anhang hinzufügen</span>
+              <input type="file" name="file" class="hidden" onchange="document.getElementById('file-label').textContent = this.files[0]?.name || 'Anhang hinzufügen'">
+            </label>
+          </form>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+{% else %}
+  {% block content_unauth %}{% endblock %}
+{% endif %}
+
+<script>
+// Sidebar
+const sidebar = document.getElementById('sidebar');
+if (sidebar) {
+  if (localStorage.getItem('sidebarExpanded') === 'true') sidebar.classList.add('expanded');
+}
+function toggleSidebar() {
+  sidebar.classList.toggle('expanded');
+  localStorage.setItem('sidebarExpanded', sidebar.classList.contains('expanded'));
+}
+function toggleMenu(id, btn) {
+  if (!sidebar.classList.contains('expanded')) {
+    sidebar.classList.add('expanded');
+    localStorage.setItem('sidebarExpanded', 'true');
+  }
+  const menu = document.getElementById(id);
+  const arrow = btn.querySelector('.menu-arrow');
+  menu.classList.toggle('open');
+  if (arrow) arrow.style.transform = menu.classList.contains('open') ? 'rotate(180deg)' : '';
+}
+document.querySelectorAll('.submenu.open').forEach(m => {
+  const btn = m.previousElementSibling;
+  if (btn) { const a = btn.querySelector('.menu-arrow'); if (a) a.style.transform = 'rotate(180deg)'; }
+});
+
+// Feed
+const CURRENT_USER_ID = {{ session.user_id|default(0) }};
+
+function scrollFeedBottom() {
+  const box = document.getElementById('feed-items');
+  if (box) box.scrollTop = box.scrollHeight;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function avatarHtml(m, size='w-6 h-6') {
+  if (m.avatar) {
+    return `<img src="/avatar/${m.user_id}" class="${size} rounded-full object-cover shrink-0 border border-white/40">`;
+  }
+  const label = (m.display_name || m.username || '?')[0].toUpperCase();
+  return `<div class="${size} rounded-full bg-[#1c3461] flex items-center justify-center shrink-0"><span class="text-white text-[10px] font-bold">${esc(label)}</span></div>`;
+}
+
+function renderFeedMsg(m) {
+  const own = m.user_id === CURRENT_USER_ID;
+  const displayName = m.display_name || m.username;
+  const attHtml = m.attachment ? `
+    <div class="pl-8 mt-1">
+      <a href="/uploads/${esc(m.attachment)}" class="text-[10px] text-blue-500 hover:underline flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+        ${esc(m.attachment.replace(/^\d{8}_\d{6}_/, ''))}
+      </a>
+    </div>` : '';
+  const ownBtns = own ? `
+    <button onclick="startEdit(${m.id},this)" class="opacity-0 group-hover:opacity-100 ml-1 text-gray-300 hover:text-blue-500 transition-all" title="Bearbeiten">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+    </button>
+    <form method="POST" action="/feed/message/${m.id}/delete" style="display:inline">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all" title="Löschen" onclick="return confirm('Löschen?')">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </form>
+    <form id="edit-${m.id}" method="POST" action="/feed/message/${m.id}/edit" class="hidden pl-8 mt-2">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="flex gap-1">
+        <input name="body" value="${esc(m.body)}" class="flex-1 bg-white border border-blue-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400">
+        <button type="submit" class="bg-blue-600 text-white px-2 py-1 rounded-lg text-xs">OK</button>
+        <button type="button" onclick="cancelEdit(${m.id})" class="text-gray-400 hover:text-gray-600 px-1 text-xs">✕</button>
+      </div>
+    </form>` : '';
+  return `
+    <div class="feed-item bg-white/80 rounded-xl p-3 shadow-sm border border-white/70 group" data-id="${m.id}">
+      <div class="flex items-center justify-between mb-1.5">
+        <div class="flex items-center gap-2">
+          ${avatarHtml(m)}
+          <span class="text-xs font-semibold text-[#1c3461]">${esc(displayName)}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="text-[10px] text-gray-400">${m.created_at.substring(11,16)}</span>
+          ${ownBtns}
+        </div>
+      </div>
+      <div class="msg-body text-xs text-gray-700 leading-relaxed pl-8">${esc(m.body)}</div>
+      ${attHtml}
+    </div>`;
+}
+
+function loadFeed() {
+  fetch('/feed/messages').then(r => r.json()).then(msgs => {
+    const box = document.getElementById('feed-items');
+    if (!box) return;
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.innerHTML = msgs.length
+      ? msgs.map(renderFeedMsg).join('')
+      : '<div class="text-center text-gray-400 text-sm py-8">Noch keine Nachrichten</div>';
+    if (atBottom) scrollFeedBottom();
+  }).catch(() => {});
+}
+
+function startEdit(id, btn) {
+  const item = btn.closest('.feed-item');
+  item.querySelector('.msg-body').classList.add('hidden');
+  const ef = document.getElementById('edit-' + id);
+  if (ef) ef.classList.remove('hidden');
+}
+function cancelEdit(id) {
+  const item = document.querySelector('[data-id="' + id + '"]');
+  item.querySelector('.msg-body').classList.remove('hidden');
+  document.getElementById('edit-' + id).classList.add('hidden');
+}
+
+document.getElementById('feed-form')?.addEventListener('submit', function() {
+  setTimeout(() => {
+    const inp = document.getElementById('feed-input');
+    if (inp) inp.value = '';
+    document.getElementById('file-label').textContent = 'Anhang hinzufügen';
+  }, 100);
+});
+
+// Initial load immediately
+loadFeed();
+scrollFeedBottom();
+setInterval(loadFeed, 20000);
+
+// ── Sync-Countdown ─────────────────────────────────────────────────────────
+const SYNC_INTERVAL = 60;
+let syncRemaining = SYNC_INTERVAL;
+
+function updateCountdown() {
+  const el = document.getElementById('sync-countdown');
+  const arc = document.getElementById('sync-arc');
+  if (!el || !arc) return;
+
+  syncRemaining--;
+  if (syncRemaining <= 0) {
+    syncRemaining = SYNC_INTERVAL;
+    // Re-fetch ticket + invoice counts
+    fetch('/api/counts').then(r => r.json()).then(d => {
+      const tb = document.getElementById('ticket-badge');
+      const ib = document.getElementById('invoice-badge');
+      if (tb) { tb.textContent = d.tickets; tb.style.display = d.tickets > 0 ? '' : 'none'; }
+      if (ib) { ib.textContent = d.invoices; ib.style.display = d.invoices > 0 ? '' : 'none'; }
+    }).catch(() => {});
+    loadFeed();
+  }
+
+  el.textContent = syncRemaining + 's';
+  // SVG arc: circumference = 2π*9 ≈ 56.5
+  const pct = syncRemaining / SYNC_INTERVAL;
+  arc.style.strokeDashoffset = (56.5 * (1 - pct)).toFixed(1);
+}
+
+setInterval(updateCountdown, 1000);
+</script>
+</body>
+</html>

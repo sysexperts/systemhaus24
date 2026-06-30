@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Kunden – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Kunden</h1>
+  <a href="{{ url_for('customer_new') }}"
+     class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+    + Neuer Kunde
+  </a>
+</div>
+
+<!-- Search/filter bar -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white p-4 mb-4">
+  <form method="GET" class="flex gap-3">
+    <input name="q" value="{{ q }}" placeholder="Suche nach Name, Firma, E-Mail..."
+           class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
+    <select name="status" class="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+      <option value="">Alle Status</option>
+      <option value="lead"     {% if status=='lead'     %}selected{% endif %}>Lead</option>
+      <option value="customer" {% if status=='customer' %}selected{% endif %}>Kunde</option>
+      <option value="inactive" {% if status=='inactive' %}selected{% endif %}>Inaktiv</option>
+    </select>
+    <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#2a4a8a] transition-colors">Suchen</button>
+  </form>
+</div>
+
+<!-- Table card -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Name / Firma</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">E-Mail</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Telefon</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in customers %}
+    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+      <td class="px-5 py-3">
+        <div class="font-medium text-gray-800">{{ c.name }}</div>
+        {% if c.company %}<div class="text-xs text-gray-400">{{ c.company }}</div>{% endif %}
+      </td>
+      <td class="px-5 py-3 text-gray-500">{{ c.email or '–' }}</td>
+      <td class="px-5 py-3 text-gray-500">{{ c.phone or '–' }}</td>
+      <td class="px-5 py-3">
+        <span class="px-2.5 py-1 rounded-full text-xs font-medium
+          {% if c.status=='customer' %}bg-green-100 text-green-700
+          {% elif c.status=='lead'   %}bg-yellow-100 text-yellow-700
+          {% else %}bg-gray-100 text-gray-500{% endif %}">
+          {{ {'lead':'Lead','customer':'Kunde','inactive':'Inaktiv'}[c.status] }}
+        </span>
+      </td>
+      <td class="px-5 py-3 text-right">
+        <div class="flex items-center justify-end gap-3">
+          <a href="{{ url_for('customer_edit', cid=c.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</a>
+          <form method="POST" action="{{ url_for('customer_delete', cid=c.id) }}" onsubmit="return confirm('Wirklich löschen?')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="px-5 py-12 text-center text-gray-400">Keine Kunden gefunden.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

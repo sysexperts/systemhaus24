@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Dokumente – tkToolkit{% endblock %}
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Header + actions -->
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-lg font-semibold text-gray-600">Dokumente</h1>
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-1.5 mt-1 text-sm text-gray-400">
+      <a href="{{ url_for('documents') }}" class="hover:text-[#1c3461]">Alle Dokumente</a>
+      {% for crumb in crumbs %}
+      <span>/</span>
+      <a href="{{ url_for('documents', folder_id=crumb.id) }}" class="hover:text-[#1c3461]">{{ crumb.name }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+  <div class="flex items-center gap-2">
+    <!-- New folder button -->
+    <button onclick="document.getElementById('new-folder-modal').classList.remove('hidden')"
+            class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-white/80 border border-white text-gray-600 hover:bg-white/90 transition-colors shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      Neuer Ordner
+    </button>
+    <!-- Upload button -->
+    <label class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors cursor-pointer shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      Hochladen
+      <form id="upload-form" method="POST" action="{{ url_for('document_upload') }}" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="parent_id" value="{{ folder_id or '' }}">
+        <input type="file" name="files" multiple class="hidden"
+               onchange="document.getElementById('upload-form').submit()">
+      </form>
+    </label>
+  </div>
+</div>
+
+<!-- Drop zone hint -->
+<div id="drop-zone"
+     class="mb-4 border-2 border-dashed border-gray-300/60 rounded-2xl p-6 text-center text-sm text-gray-400 hidden transition-all">
+  Dateien hier ablegen zum Hochladen
+</div>
+
+<!-- Content -->
+{% if items %}
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
+        <th class="px-5 py-3 text-left w-8"></th>
+        <th class="px-4 py-3 text-left">Name</th>
+        <th class="px-4 py-3 text-left">Typ / Größe</th>
+        <th class="px-4 py-3 text-left">Hochgeladen von</th>
+        <th class="px-4 py-3 text-left">Datum</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in items %}
+    <tr class="border-b border-gray-50 hover:bg-blue-50/30 transition-colors group">
+      <!-- Icon -->
+      <td class="px-5 py-3">
+        {% if item.type == 'folder' %}
+        <svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8L10 4z"/></svg>
+        {% else %}
+          {% set ext = item.name.rsplit('.',1)[-1].lower() if '.' in item.name else '' %}
+          {% if ext in ['jpg','jpeg','png','gif','svg','webp'] %}
+          <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          {% elif ext == 'pdf' %}
+          <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          {% elif ext in ['doc','docx'] %}
+          <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          {% elif ext in ['xls','xlsx','csv'] %}
+          <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          {% else %}
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          {% endif %}
+        {% endif %}
+      </td>
+      <!-- Name -->
+      <td class="px-4 py-3">
+        {% if item.type == 'folder' %}
+        <a href="{{ url_for('documents', folder_id=item.id) }}" class="font-medium text-[#1c3461] hover:underline">
+          {{ item.name }}
+        </a>
+        {% else %}
+        <a href="{{ url_for('document_download', did=item.id) }}" class="text-gray-800 hover:text-[#1c3461] hover:underline">
+          {{ item.name }}
+        </a>
+        {% endif %}
+      </td>
+      <!-- Type / Size -->
+      <td class="px-4 py-3 text-gray-400 text-xs">
+        {% if item.type == 'folder' %}
+        <span class="bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full font-medium">Ordner</span>
+        {% else %}
+          {% set ext = item.name.rsplit('.',1)[-1].upper() if '.' in item.name else 'DATEI' %}
+          <span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{{ ext }}</span>
+          <span class="ml-1">
+          {% if item.file_size %}
+            {% if item.file_size > 1048576 %}{{ '%.1f'|format(item.file_size/1048576) }} MB
+            {% elif item.file_size > 1024 %}{{ '%.0f'|format(item.file_size/1024) }} KB
+            {% else %}{{ item.file_size }} B{% endif %}
+          {% endif %}
+          </span>
+        {% endif %}
+      </td>
+      <!-- Uploader -->
+      <td class="px-4 py-3 text-gray-400 text-xs">{{ item.uploaded_by or '–' }}</td>
+      <!-- Date -->
+      <td class="px-4 py-3 text-gray-400 text-xs">{{ item.created_at[:10] }}</td>
+      <!-- Actions -->
+      <td class="px-4 py-3">
+        <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {% if item.type == 'file' %}
+          <a href="{{ url_for('document_download', did=item.id) }}"
+             class="text-xs text-blue-500 hover:underline px-2 py-1 rounded-lg hover:bg-blue-50">
+            Download
+          </a>
+          {% endif %}
+          <button onclick="openRename({{ item.id }}, '{{ item.name|e }}', {{ folder_id or 'null' }})"
+                  class="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100">
+            Umbenennen
+          </button>
+          <form method="POST" action="{{ url_for('document_delete', did=item.id) }}"
+                onsubmit="return confirm('\'{{ item.name|e }}\' wirklich löschen{% if item.type == 'folder' %} (inkl. Inhalt){% endif %}?')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="parent_id" value="{{ folder_id or '' }}">
+            <button class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50">Löschen</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white p-16 text-center">
+  <svg class="w-14 h-14 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+  </svg>
+  <p class="text-gray-400 mb-5">
+    {% if folder %}Dieser Ordner ist leer.{% else %}Noch keine Dokumente vorhanden.{% endif %}
+  </p>
+  <div class="flex items-center justify-center gap-3">
+    <button onclick="document.getElementById('new-folder-modal').classList.remove('hidden')"
+            class="px-5 py-2.5 rounded-xl text-sm border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
+      Ordner erstellen
+    </button>
+    <label class="px-5 py-2.5 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors cursor-pointer">
+      Datei hochladen
+      <input type="file" multiple class="hidden"
+             onchange="uploadFiles(this.files)">
+    </label>
+  </div>
+</div>
+{% endif %}
+
+<!-- New folder modal -->
+<div id="new-folder-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+    <h2 class="font-semibold text-gray-800 mb-4">Neuer Ordner</h2>
+    <form method="POST" action="{{ url_for('document_new_folder') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="parent_id" value="{{ folder_id or '' }}">
+      <input name="name" placeholder="Ordnername" autofocus required
+             class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-4">
+      <div class="flex gap-3">
+        <button type="submit" class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Erstellen</button>
+        <button type="button" onclick="document.getElementById('new-folder-modal').classList.add('hidden')"
+                class="flex-1 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">Abbrechen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Rename modal -->
+<div id="rename-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+    <h2 class="font-semibold text-gray-800 mb-4">Umbenennen</h2>
+    <form id="rename-form" method="POST">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="parent_id" value="{{ folder_id or '' }}">
+      <input id="rename-input" name="name" placeholder="Neuer Name" required autofocus
+             class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-4">
+      <div class="flex gap-3">
+        <button type="submit" class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+        <button type="button" onclick="document.getElementById('rename-modal').classList.add('hidden')"
+                class="flex-1 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">Abbrechen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Drag & drop upload zone -->
+<form id="dnd-form" method="POST" action="{{ url_for('document_upload') }}" enctype="multipart/form-data" style="display:none">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="parent_id" value="{{ folder_id or '' }}">
+  <input id="dnd-input" type="file" name="files" multiple>
+</form>
+
+<script>
+function openRename(id, currentName, parentId) {
+  document.getElementById('rename-form').action = '/documents/' + id + '/rename';
+  document.getElementById('rename-input').value = currentName;
+  document.getElementById('rename-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('rename-input').select(), 50);
+}
+
+// Upload via inline input
+function uploadFiles(files) {
+  const dt = new DataTransfer();
+  [...files].forEach(f => dt.items.add(f));
+  document.getElementById('dnd-input').files = dt.files;
+  document.getElementById('dnd-form').submit();
+}
+
+// Drag & drop
+const body = document.body;
+let dragCounter = 0;
+body.addEventListener('dragenter', e => {
+  if ([...e.dataTransfer.types].includes('Files')) {
+    dragCounter++;
+    document.getElementById('drop-zone').classList.remove('hidden');
+    document.getElementById('drop-zone').classList.add('border-blue-400','bg-blue-50/40');
+  }
+});
+body.addEventListener('dragleave', e => {
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    document.getElementById('drop-zone').classList.add('hidden');
+    document.getElementById('drop-zone').classList.remove('border-blue-400','bg-blue-50/40');
+  }
+});
+body.addEventListener('dragover', e => e.preventDefault());
+body.addEventListener('drop', e => {
+  e.preventDefault();
+  dragCounter = 0;
+  document.getElementById('drop-zone').classList.add('hidden');
+  if (e.dataTransfer.files.length) {
+    uploadFiles(e.dataTransfer.files);
+  }
+});
+
+// Close modals on backdrop click
+['new-folder-modal','rename-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.add('hidden');
+  });
+});
+</script>
+{% endblock %}

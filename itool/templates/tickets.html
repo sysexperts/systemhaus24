@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Tickets – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Tickets</h1>
+  <a href="{{ url_for('ticket_new') }}"
+     class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+    + Neues Ticket
+  </a>
+</div>
+
+<!-- Status filter -->
+<div class="flex gap-2 mb-4">
+  {% for val, label in [('','Alle'),('open','Offen'),('in_progress','In Arbeit'),('closed','Gelöst')] %}
+  <a href="{{ url_for('tickets', status=val) }}"
+     class="px-4 py-1.5 rounded-xl text-sm font-medium transition-colors
+       {% if status==val %}bg-[#1c3461] text-white shadow-sm{% else %}bg-white/70 text-gray-500 hover:bg-white/90{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Titel</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kunde</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Priorität</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Erstellt</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in tickets %}
+    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors {% if not t.is_read %}bg-white{% else %}bg-gray-50/30{% endif %}">
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-2">
+          {% if not t.is_read %}
+          <span class="w-2 h-2 rounded-full bg-[#1c3461] shrink-0"></span>
+          {% else %}
+          <span class="w-2 h-2 shrink-0"></span>
+          {% endif %}
+          <a href="{{ url_for('ticket_detail', tid=t.id) }}"
+             class="hover:underline {% if not t.is_read %}font-bold text-gray-900{% else %}font-normal text-gray-600{% endif %}">{{ t.title }}</a>
+        </div>
+      </td>
+      <td class="px-5 py-3 text-gray-500 text-xs">{{ t.customer_name or '–' }}</td>
+      <td class="px-5 py-3">
+        <span class="px-2.5 py-1 rounded-full text-xs font-medium
+          {% if t.priority=='high' %}bg-red-100 text-red-700
+          {% elif t.priority=='low'%}bg-gray-100 text-gray-500
+          {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+          {{ {'high':'Hoch','medium':'Mittel','low':'Niedrig'}[t.priority] }}
+        </span>
+      </td>
+      <td class="px-5 py-3">
+        <span class="px-2.5 py-1 rounded-full text-xs font-medium
+          {% if t.status=='open'       %}bg-blue-100 text-blue-700
+          {% elif t.status=='in_progress'%}bg-yellow-100 text-yellow-700
+          {% else %}bg-green-100 text-green-700{% endif %}">
+          {{ {'open':'Offen','in_progress':'In Arbeit','closed':'Gelöst'}[t.status] }}
+        </span>
+      </td>
+      <td class="px-5 py-3 text-gray-400 text-xs">{{ t.created_at[:10] }}</td>
+      <td class="px-5 py-3 text-right">
+        <div class="flex items-center justify-end gap-3">
+          <a href="{{ url_for('ticket_edit', tid=t.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</a>
+          <form method="POST" action="{{ url_for('ticket_delete', tid=t.id) }}" onsubmit="return confirm('Ticket löschen?')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="px-5 py-12 text-center text-gray-400">Keine Tickets gefunden.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

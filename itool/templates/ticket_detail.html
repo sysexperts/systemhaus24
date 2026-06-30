@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}Ticket #{{ ticket.id }} – tkToolkit{% endblock %}
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Header -->
+<div class="flex items-start justify-between mb-5 gap-4">
+  <div class="flex-1">
+    <div class="flex items-center gap-2 text-xs text-gray-400 mb-1">
+      <a href="{{ url_for('tickets') }}" class="hover:text-[#1c3461]">Tickets</a>
+      <span>/</span>
+      <span>Ticket #{{ ticket.id }}</span>
+    </div>
+    <h1 class="text-lg font-semibold text-gray-800">{{ ticket.title }}</h1>
+  </div>
+  <div class="flex items-center gap-2 shrink-0">
+    <a href="{{ url_for('ticket_edit', tid=ticket.id) }}"
+       class="px-4 py-2 rounded-xl text-sm text-gray-500 bg-white/70 hover:bg-white/90 transition-colors">
+      Bearbeiten
+    </a>
+    <form method="POST" action="{{ url_for('ticket_delete', tid=ticket.id) }}"
+          onsubmit="return confirm('Ticket wirklich löschen?')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="px-4 py-2 rounded-xl text-sm text-red-400 bg-white/70 hover:bg-red-50 transition-colors">
+        Löschen
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="grid grid-cols-3 gap-5">
+
+  <!-- LEFT: Details + Updates -->
+  <div class="col-span-2 space-y-4">
+
+    <!-- Ticket Info -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <div class="grid grid-cols-3 gap-4 mb-4">
+        <div>
+          <p class="text-xs text-gray-400 mb-1">Status</p>
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-medium
+            {% if ticket.status=='open' %}bg-blue-100 text-blue-700
+            {% elif ticket.status=='in_progress' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-green-100 text-green-700{% endif %}">
+            {{ {'open':'Offen','in_progress':'In Arbeit','closed':'Gelöst'}[ticket.status] }}
+          </span>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 mb-1">Priorität</p>
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-medium
+            {% if ticket.priority=='high' %}bg-red-100 text-red-700
+            {% elif ticket.priority=='low' %}bg-gray-100 text-gray-500
+            {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+            {{ {'high':'Hoch','medium':'Mittel','low':'Niedrig'}[ticket.priority] }}
+          </span>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 mb-1">Erstellt</p>
+          <span class="text-sm text-gray-600">{{ ticket.created_at[:16].replace('T',' ') }}</span>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 mb-1">Kunde</p>
+          <span class="text-sm text-gray-700">
+            {% if ticket.customer_name %}
+              {{ ticket.customer_name }}{% if ticket.customer_company %} ({{ ticket.customer_company }}){% endif %}
+            {% else %}–{% endif %}
+          </span>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 mb-1">E-Mail Kunde</p>
+          <span class="text-sm text-gray-700">{{ ticket.customer_email or '–' }}</span>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 mb-1">Zuletzt geändert</p>
+          <span class="text-sm text-gray-600">{{ ticket.updated_at[:16].replace('T',' ') if ticket.updated_at else '–' }}</span>
+        </div>
+      </div>
+      {% if ticket.description %}
+      <div class="border-t border-gray-100 pt-4">
+        <p class="text-xs text-gray-400 mb-2">Beschreibung</p>
+        <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-xl p-3">{{ ticket.description }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Status change quick bar -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-4">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Status ändern</p>
+      <form method="POST" action="{{ url_for('ticket_update_post', tid=ticket.id) }}" class="flex gap-2 flex-wrap">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="update_type" value="status_change">
+        {% for val, label, cls in [
+          ('open','Offen','bg-blue-100 text-blue-700 hover:bg-blue-200'),
+          ('in_progress','In Arbeit','bg-yellow-100 text-yellow-700 hover:bg-yellow-200'),
+          ('closed','Gelöst','bg-green-100 text-green-700 hover:bg-green-200')
+        ] %}
+        <button type="submit" name="status" value="{{ val }}"
+                class="px-4 py-1.5 rounded-xl text-xs font-medium transition-colors {{ cls }}
+                       {% if ticket.status==val %}ring-2 ring-offset-1 ring-current{% endif %}">
+          {{ label }}
+        </button>
+        {% endfor %}
+      </form>
+    </div>
+
+    <!-- Update timeline -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Verlauf</p>
+
+      {% if updates %}
+      <div class="space-y-4 mb-5">
+        {% for u in updates %}
+        <div class="flex gap-3">
+          <div class="shrink-0 mt-0.5">
+            {% if u.update_type == 'status_change' %}
+            <div class="w-7 h-7 rounded-full bg-yellow-100 flex items-center justify-center">
+              <svg class="w-3.5 h-3.5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+            </div>
+            {% elif u.update_type == 'email_sent' %}
+            <div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
+              <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            {% else %}
+            <div class="w-7 h-7 rounded-full bg-[#1c3461] flex items-center justify-center">
+              <span class="text-white text-[10px] font-bold">{{ u.username[0].upper() }}</span>
+            </div>
+            {% endif %}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="text-xs font-semibold text-gray-700">{{ u.username }}</span>
+              <span class="text-[10px] text-gray-400">{{ u.created_at[:16].replace('T',' ') }}</span>
+              {% if u.update_type == 'email_sent' %}
+              <span class="text-[10px] bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">E-Mail</span>
+              {% elif u.update_type == 'email_reply' %}
+              <span class="text-[10px] bg-purple-50 text-purple-500 px-2 py-0.5 rounded-full">Kundenantwort</span>
+              {% elif u.update_type == 'status_change' %}
+              <span class="text-[10px] bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded-full">Status</span>
+              {% endif %}
+              {% if u.time_minutes and u.time_minutes > 0 %}
+              <span class="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {% if u.time_minutes >= 60 %}{{ u.time_minutes // 60 }}h {% if u.time_minutes % 60 %}{{ u.time_minutes % 60 }}min{% endif %}{% else %}{{ u.time_minutes }}min{% endif %}
+              </span>
+              {% endif %}
+            </div>
+            <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-xl p-3">{{ u.body }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-400 mb-5">Noch keine Updates.</p>
+      {% endif %}
+
+      <!-- Add comment -->
+      <div class="border-t border-gray-100 pt-4">
+        <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Update schreiben</p>
+        <form method="POST" action="{{ url_for('ticket_update_post', tid=ticket.id) }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="update_type" value="comment">
+          <textarea name="body" rows="3" placeholder="Update, Lösung, interne Notiz..."
+                    class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+          <!-- Zeit erfassen -->
+          <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2 border border-gray-200">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-xs text-gray-400">Zeit aufgewendet:</span>
+            <input name="time_h" type="number" min="0" max="99" placeholder="0"
+                   class="w-14 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400">
+            <span class="text-xs text-gray-400">h</span>
+            <input name="time_m" type="number" min="0" max="59" placeholder="0"
+                   class="w-14 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400">
+            <span class="text-xs text-gray-400">min</span>
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" class="bg-[#1c3461] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+              Update speichern
+            </button>
+            <button type="submit" name="status" value="closed"
+                    class="px-5 py-2 rounded-xl text-sm font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
+              Update & Schließen
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: Sidebar -->
+  <div class="col-span-1 space-y-4">
+
+    <!-- Send Email -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        E-Mail senden
+      </p>
+      <form method="POST" action="{{ url_for('ticket_send_email', tid=ticket.id) }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">An</label>
+          <input name="to_email" type="email" value="{{ ticket.customer_email or '' }}" placeholder="kunde@beispiel.de"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Betreff</label>
+          <input name="subject" value="Ticket #{{ ticket.id }}: {{ ticket.title }}"
+                 class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Nachricht</label>
+          <textarea name="body" rows="5" placeholder="Guten Tag,&#10;&#10;bezüglich Ihres Anliegens..."
+                    class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+        </div>
+        <button type="submit"
+                class="w-full bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          E-Mail senden
+        </button>
+      </form>
+    </div>
+
+    <!-- Ticket Info summary -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Info</p>
+      <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between">
+          <span class="text-gray-400">Ticket-Nr.</span>
+          <span class="font-mono text-gray-700">#{{ ticket.id }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Updates</span>
+          <span class="text-gray-700">{{ updates|length }}</span>
+        </div>
+        {% if ticket.customer_name %}
+        <div class="flex justify-between">
+          <span class="text-gray-400">Kunde</span>
+          <a href="{{ url_for('customers') }}" class="text-[#1c3461] hover:underline text-xs">{{ ticket.customer_name }}</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
