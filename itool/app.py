@@ -2482,7 +2482,7 @@ def akquise_convert(lid):
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def _startup():
     init_db()
     db = get_db()
     existing = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -2494,4 +2494,8 @@ if __name__ == "__main__":
     t2 = threading.Thread(target=check_recurring_invoices, daemon=True)
     t2.start()
     print("[RECURRING] Hintergrund-Job gestartet (stündliche Prüfung)")
+
+_startup()
+
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
