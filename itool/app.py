@@ -37,7 +37,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY  = True,
     SESSION_COOKIE_SAMESITE  = "Lax",
     SESSION_COOKIE_SECURE    = False,   # set True when serving over HTTPS
-    PERMANENT_SESSION_LIFETIME = 8 * 3600,  # 8 hours
+    PERMANENT_SESSION_LIFETIME = 2 * 3600,  # 8 hours
     MAX_CONTENT_LENGTH       = 20 * 1024 * 1024,  # 20 MB upload limit
 )
 
@@ -194,7 +194,7 @@ def enforce_csrf_and_session():
     # Session timeout: log out after 8h of inactivity
     if "user_id" in session:
         last_active = session.get("_last_active", time.time())
-        if time.time() - last_active > 8 * 3600:
+        if time.time() - last_active > 2 * 3600:
             session.clear()
             flash("Sitzung abgelaufen. Bitte erneut anmelden.", "error")
             return redirect(url_for("login"))
