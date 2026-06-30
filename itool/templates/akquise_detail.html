@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.contact_name }} – Akquise{% endblock %}
+{% block content %}
+
+{% set stage_map = {} %}
+{% for k,l,c in stages %}{% set _ = stage_map.update({k: {'label': l, 'cls': c}}) %}{% endfor %}
+
+<!-- Header -->
+<div class="flex items-center gap-3 mb-6">
+  <a href="{{ url_for('akquise') }}" class="text-gray-400 hover:text-gray-600 transition-colors">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+  </a>
+  <div class="flex-1">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold text-gray-800">{{ lead.contact_name }}</h1>
+      {% if lead.company %}<span class="text-gray-400 text-sm">· {{ lead.company }}</span>{% endif %}
+      <span class="text-xs font-semibold px-2.5 py-1 rounded-full {{ stage_map[lead.stage].cls if lead.stage in stage_map else 'bg-gray-100 text-gray-500' }}">
+        {{ stage_map[lead.stage].label if lead.stage in stage_map else lead.stage }}
+      </span>
+    </div>
+    <p class="text-xs text-gray-400 mt-0.5">Erfasst am {{ lead.created_at[:10] }} · Quelle: {{ lead.source }}</p>
+  </div>
+  <form method="POST" action="{{ url_for('akquise_delete', lid=lead.id) }}"
+        onsubmit="return confirm('Lead wirklich löschen?')">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="text-red-400 hover:text-red-600 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+      Löschen
+    </button>
+  </form>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- Linke Spalte: Infos + Stage + Aktivitäten -->
+  <div class="xl:col-span-2 flex flex-col gap-5">
+
+    <!-- Aktivität hinzufügen -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Aktivität erfassen</p>
+      <form method="POST" action="{{ url_for('akquise_activity', lid=lead.id) }}" class="space-y-3">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <!-- Typ-Tabs -->
+        <div class="flex gap-2 flex-wrap">
+          {% for val, label, icon in [
+            ('note',  'Notiz',    '📝'),
+            ('call',  'Anruf',    '📞'),
+            ('email', 'E-Mail',   '✉️'),
+            ('meeting','Meeting', '🤝'),
+          ] %}
+          <label class="cursor-pointer">
+            <input type="radio" name="type" value="{{ val }}" class="sr-only peer" {% if loop.first %}checked{% endif %}>
+            <span class="text-xs font-medium px-3 py-1.5 rounded-xl border border-gray-200 peer-checked:bg-[#1c3461] peer-checked:text-white peer-checked:border-[#1c3461] hover:bg-gray-50 transition-colors block">
+              {{ icon }} {{ label }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+        <textarea name="body" rows="2" placeholder="Was ist passiert? Was wurde besprochen?" required
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 resize-none"></textarea>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 flex-1">
+            <label class="text-xs text-gray-400 shrink-0">Wiedervorlage:</label>
+            <input type="date" name="next_followup" value="{{ lead.next_followup or '' }}"
+                   class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30">
+          </div>
+          <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors shrink-0">
+            Speichern
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Aktivitäten-Timeline -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-50">
+        <p class="text-sm font-semibold text-gray-700">Verlauf</p>
+      </div>
+      {% if activities %}
+      <div class="divide-y divide-gray-50">
+        {% for act in activities %}
+        {% set icons = {'note':'📝','call':'📞','email':'✉️','meeting':'🤝','stage':'🔄','converted':'🎉'} %}
+        <div class="px-5 py-4 flex gap-3">
+          <span class="text-lg shrink-0 mt-0.5">{{ icons.get(act.type, '📌') }}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="text-xs font-semibold text-gray-500">
+                {{ {'note':'Notiz','call':'Anruf','email':'E-Mail','meeting':'Meeting','stage':'Statusänderung','converted':'Konvertiert'}.get(act.type, act.type) }}
+                {% if act.created_by %} · {{ act.created_by }}{% endif %}
+              </span>
+              <span class="text-xs text-gray-300 shrink-0">{{ act.created_at[:16].replace('T',' ') }}</span>
+            </div>
+            <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ act.body }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-5 py-10 text-center text-gray-300 text-sm">Noch keine Aktivitäten.</div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Rechte Spalte: Stage + Details -->
+  <div class="flex flex-col gap-5">
+
+    <!-- Stage ändern -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Phase ändern</p>
+      <div class="space-y-2">
+        {% for sk, sl, sc in stages %}
+        <form method="POST" action="{{ url_for('akquise_stage', lid=lead.id) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="stage" value="{{ sk }}">
+          <button type="submit"
+                  class="w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-colors
+                         {{ sc }} {% if lead.stage == sk %}ring-2 ring-offset-1 ring-current opacity-100{% else %}opacity-70 hover:opacity-100{% endif %}">
+            {% if lead.stage == sk %}▶ {% endif %}{{ sl }}
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+      {% if lead.stage == 'won' %}
+      <div class="mt-4 pt-4 border-t border-gray-100">
+        <form method="POST" action="{{ url_for('akquise_convert', lid=lead.id) }}"
+              onsubmit="return confirm('Lead als Kunde anlegen?')">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+                  class="w-full bg-emerald-500 text-white py-2 rounded-xl text-sm font-medium hover:bg-emerald-600 transition-colors">
+            🎉 Als Kunde anlegen
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Lead-Daten bearbeiten -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Lead-Daten</p>
+      <form method="POST" action="{{ url_for('akquise_edit', lid=lead.id) }}" class="space-y-3">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Ansprechpartner *</label>
+          <input type="text" name="contact_name" value="{{ lead.contact_name }}" required
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Firma</label>
+          <input type="text" name="company" value="{{ lead.company or '' }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">E-Mail</label>
+          <input type="email" name="contact_email" value="{{ lead.contact_email or '' }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Telefon</label>
+          <input type="text" name="contact_phone" value="{{ lead.contact_phone or '' }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Quelle</label>
+          <select name="source" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+            {% for s in sources %}
+            <option {% if lead.source == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Deal-Wert (€)</label>
+          <input type="number" name="deal_value" step="0.01" value="{{ lead.deal_value or 0 }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Wiedervorlage</label>
+          <input type="date" name="next_followup" value="{{ lead.next_followup or '' }}"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Interne Notiz</label>
+          <textarea name="notes" rows="3"
+                    class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 resize-none">{{ lead.notes or '' }}</textarea>
+        </div>
+        <button type="submit" class="w-full bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          Speichern
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

@@ -167,6 +167,16 @@
     </div>
     {% endif %}
 
+    <!-- Akquise -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('akquise') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'akquise' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Akquise</span>
+      </a>
+    </div>
+
     <!-- Buchhaltung -->
     <div class="mx-2 mb-1">
       <a href="{{ url_for('accounting') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'accounting' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">

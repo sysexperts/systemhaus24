@@ -2092,6 +2092,205 @@ def expense_receipt(eid):
     return send_from_directory(RECEIPT_DIR, filename)
 
 
+# ── Akquise / Lead Pipeline ───────────────────────────────────────────────────
+
+LEAD_STAGES = [
+    ("new",        "Neu",              "bg-gray-100 text-gray-600"),
+    ("contacted",  "Kontaktiert",      "bg-blue-100 text-blue-700"),
+    ("proposal",   "Angebot gesendet", "bg-yellow-100 text-yellow-700"),
+    ("negotiation","Verhandlung",      "bg-orange-100 text-orange-700"),
+    ("won",        "Gewonnen",         "bg-green-100 text-green-700"),
+    ("lost",       "Verloren",         "bg-red-100 text-red-700"),
+]
+STAGE_KEYS = [s[0] for s in LEAD_STAGES]
+
+LEAD_SOURCES = ["Website", "Empfehlung", "Kaltakquise", "LinkedIn", "Messe", "Promoter", "Sonstiges"]
+
+
+@app.route("/akquise")
+@login_required
+def akquise():
+    db = get_db()
+    leads = db.execute("""
+        SELECT l.*,
+               (SELECT body FROM lead_activities WHERE lead_id=l.id ORDER BY created_at DESC LIMIT 1) as last_activity,
+               (SELECT created_at FROM lead_activities WHERE lead_id=l.id ORDER BY created_at DESC LIMIT 1) as last_activity_at
+        FROM leads l ORDER BY l.updated_at DESC
+    """).fetchall()
+
+    # KPIs
+    total       = len(leads)
+    won         = sum(1 for l in leads if l["stage"] == "won")
+    active      = sum(1 for l in leads if l["stage"] not in ("won", "lost"))
+    pipeline_val= sum(l["deal_value"] or 0 for l in leads if l["stage"] not in ("won", "lost"))
+    won_val     = sum(l["deal_value"] or 0 for l in leads if l["stage"] == "won")
+    conv_rate   = round(won / total * 100) if total else 0
+
+    # Group by stage for kanban
+    from collections import defaultdict
+    by_stage = defaultdict(list)
+    for l in leads:
+        by_stage[l["stage"]].append(dict(l))
+
+    # Overdue follow-ups
+    today = date.today().isoformat()
+    overdue = [l for l in leads if l["next_followup"] and l["next_followup"] < today
+               and l["stage"] not in ("won", "lost")]
+
+    db.close()
+    return render_template("akquise.html",
+                           leads=leads, by_stage=by_stage,
+                           stages=LEAD_STAGES, stage_keys=STAGE_KEYS,
+                           sources=LEAD_SOURCES,
+                           kpi=dict(total=total, won=won, active=active,
+                                    pipeline_val=pipeline_val, won_val=won_val,
+                                    conv_rate=conv_rate),
+                           overdue=overdue, today=today)
+
+
+@app.route("/akquise/new", methods=["POST"])
+@login_required
+def akquise_new():
+    db = get_db()
+    db.execute("""
+        INSERT INTO leads (company, contact_name, contact_email, contact_phone,
+                           source, stage, deal_value, notes, next_followup)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    """, (
+        request.form.get("company", "").strip(),
+        request.form.get("contact_name", "").strip(),
+        request.form.get("contact_email", "").strip(),
+        request.form.get("contact_phone", "").strip(),
+        request.form.get("source", "Sonstiges"),
+        "new",
+        float(request.form.get("deal_value") or 0),
+        request.form.get("notes", "").strip(),
+        request.form.get("next_followup") or None,
+    ))
+    db.commit()
+    db.close()
+    flash("Lead erfasst.", "success")
+    return redirect(url_for("akquise"))
+
+
+@app.route("/akquise/<int:lid>")
+@login_required
+def akquise_detail(lid):
+    db = get_db()
+    lead = db.execute("SELECT * FROM leads WHERE id=?", (lid,)).fetchone()
+    if not lead:
+        db.close()
+        flash("Lead nicht gefunden.", "error")
+        return redirect(url_for("akquise"))
+    activities = db.execute(
+        "SELECT * FROM lead_activities WHERE lead_id=? ORDER BY created_at DESC", (lid,)
+    ).fetchall()
+    db.close()
+    return render_template("akquise_detail.html", lead=lead, activities=activities,
+                           stages=LEAD_STAGES, sources=LEAD_SOURCES, today=date.today().isoformat())
+
+
+@app.route("/akquise/<int:lid>/stage", methods=["POST"])
+@login_required
+def akquise_stage(lid):
+    new_stage = request.form.get("stage", "")
+    if new_stage not in STAGE_KEYS:
+        abort(400)
+    lost_reason = request.form.get("lost_reason", "").strip()
+    db = get_db()
+    db.execute("UPDATE leads SET stage=?, lost_reason=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+               (new_stage, lost_reason if new_stage == "lost" else None, lid))
+    # Auto-activity log
+    labels = {s[0]: s[1] for s in LEAD_STAGES}
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (?,?,?,?)",
+               (lid, "stage", f"Status geändert → {labels.get(new_stage, new_stage)}", session["username"]))
+    db.commit()
+    db.close()
+    return redirect(request.referrer or url_for("akquise_detail", lid=lid))
+
+
+@app.route("/akquise/<int:lid>/activity", methods=["POST"])
+@login_required
+def akquise_activity(lid):
+    atype = request.form.get("type", "note")
+    body  = request.form.get("body", "").strip()
+    followup = request.form.get("next_followup") or None
+    if not body:
+        return redirect(url_for("akquise_detail", lid=lid))
+    db = get_db()
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (?,?,?,?)",
+               (lid, atype, body, session["username"]))
+    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=? WHERE id=?",
+               (followup, lid))
+    db.commit()
+    db.close()
+    return redirect(url_for("akquise_detail", lid=lid))
+
+
+@app.route("/akquise/<int:lid>/edit", methods=["POST"])
+@login_required
+def akquise_edit(lid):
+    db = get_db()
+    db.execute("""UPDATE leads SET company=?, contact_name=?, contact_email=?,
+                  contact_phone=?, source=?, deal_value=?, notes=?, next_followup=?,
+                  updated_at=CURRENT_TIMESTAMP WHERE id=?""", (
+        request.form.get("company", "").strip(),
+        request.form.get("contact_name", "").strip(),
+        request.form.get("contact_email", "").strip(),
+        request.form.get("contact_phone", "").strip(),
+        request.form.get("source", "Sonstiges"),
+        float(request.form.get("deal_value") or 0),
+        request.form.get("notes", "").strip(),
+        request.form.get("next_followup") or None,
+        lid,
+    ))
+    db.commit()
+    db.close()
+    flash("Lead aktualisiert.", "success")
+    return redirect(url_for("akquise_detail", lid=lid))
+
+
+@app.route("/akquise/<int:lid>/delete", methods=["POST"])
+@login_required
+def akquise_delete(lid):
+    db = get_db()
+    db.execute("DELETE FROM leads WHERE id=?", (lid,))
+    db.commit()
+    db.close()
+    flash("Lead gelöscht.", "success")
+    return redirect(url_for("akquise"))
+
+
+@app.route("/akquise/<int:lid>/convert", methods=["POST"])
+@login_required
+def akquise_convert(lid):
+    """Convert a won lead into a customer."""
+    db = get_db()
+    lead = db.execute("SELECT * FROM leads WHERE id=?", (lid,)).fetchone()
+    if not lead:
+        db.close()
+        flash("Lead nicht gefunden.", "error")
+        return redirect(url_for("akquise"))
+    cnum = next_customer_number(db)
+    db.execute("""INSERT INTO customers (customer_number, name, company, email, phone, source, status)
+                  VALUES (?,?,?,?,?,?,?)""", (
+        cnum,
+        lead["contact_name"],
+        lead["company"] or "",
+        lead["contact_email"] or "",
+        lead["contact_phone"] or "",
+        lead["source"] or "",
+        "customer",
+    ))
+    db.execute("UPDATE leads SET stage='won', updated_at=CURRENT_TIMESTAMP WHERE id=?", (lid,))
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (?,?,?,?)",
+               (lid, "converted", f"In Kunde umgewandelt (Kundennr. {cnum})", session["username"]))
+    db.commit()
+    db.close()
+    flash(f"Lead als Kunde angelegt ({cnum}).", "success")
+    return redirect(url_for("akquise"))
+
+
 # ── Init ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -156,6 +156,31 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company TEXT,
+            contact_name TEXT NOT NULL,
+            contact_email TEXT,
+            contact_phone TEXT,
+            source TEXT DEFAULT 'Sonstiges',
+            stage TEXT DEFAULT 'new',
+            deal_value REAL DEFAULT 0,
+            notes TEXT,
+            next_followup TEXT,
+            lost_reason TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS lead_activities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+            type TEXT NOT NULL DEFAULT 'note',
+            body TEXT NOT NULL,
+            created_by TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             article_number TEXT,
