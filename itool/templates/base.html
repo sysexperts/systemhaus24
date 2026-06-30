@@ -197,6 +197,7 @@
       </a>
     </div>
 
+    {% if session.get('role') == 'admin' %}
     <!-- Einstellungen -->
     <div class="mx-2 mb-1">
       <a href="{{ url_for('settings') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'settings' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -206,15 +207,27 @@
         <span class="lbl text-sm text-white font-medium">Einstellungen</span>
       </a>
     </div>
+    <!-- Benutzerverwaltung -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('users_list') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if request.endpoint == 'users_list' %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Benutzer</span>
+      </a>
+    </div>
+    {% endif %}
 
     <!-- Bottom -->
     <div class="mt-auto mx-2 space-y-1">
+      {% if session.get('role') == 'admin' %}
       <a href="{{ url_for('backup') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors" title="Backup">
         <svg class="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
         </svg>
         <span class="lbl text-xs text-white/50">Backup</span>
       </a>
+      {% endif %}
       <div class="border-t border-white/10 my-1"></div>
       <!-- User row -->
       <a href="{{ url_for('settings') }}#allgemein" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors">

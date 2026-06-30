@@ -182,6 +182,8 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
+        if session.get("role") == "promoter":
+            return redirect(url_for("promoter_dashboard"))
         return f(*args, **kwargs)
     return decorated
 
@@ -217,9 +219,11 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
-        if session.get("role", "admin") != "admin":
-            flash("Kein Zugriff – nur für Admins.", "error")
+        if session.get("role") == "promoter":
             return redirect(url_for("promoter_dashboard"))
+        if session.get("role") != "admin":
+            flash("Kein Zugriff – nur für Administratoren.", "error")
+            return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
 
@@ -1271,6 +1275,90 @@ def backup():
         download_name=f"systemhaus24_backup_{ts}.zip",
         mimetype="application/zip",
     )
+
+
+# ── User Management ───────────────────────────────────────────────────────────
+
+@app.route("/users")
+@admin_required
+def users_list():
+    db = get_db()
+    users = db.execute("SELECT id, username, display_name, role FROM users ORDER BY role, username").fetchall()
+    db.close()
+    return render_template("users.html", users=users)
+
+
+@app.route("/users/add", methods=["POST"])
+@admin_required
+def users_add():
+    username    = request.form.get("username", "").strip()
+    display     = request.form.get("display_name", "").strip()
+    password    = request.form.get("password", "")
+    role        = request.form.get("role", "user")
+    if role not in ("admin", "user"):
+        role = "user"
+    if not username or not password:
+        flash("Benutzername und Passwort erforderlich.", "error")
+        return redirect(url_for("users_list"))
+    db = get_db()
+    if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
+        db.close()
+        flash(f"Benutzername '{username}' ist bereits vergeben.", "error")
+        return redirect(url_for("users_list"))
+    db.execute(
+        "INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,?)",
+        (username, generate_password_hash(password), display or username, role),
+    )
+    db.commit()
+    db.close()
+    flash(f"Benutzer '{username}' angelegt.", "success")
+    return redirect(url_for("users_list"))
+
+
+@app.route("/users/<int:uid>/role", methods=["POST"])
+@admin_required
+def users_set_role(uid):
+    if uid == session["user_id"]:
+        flash("Du kannst deine eigene Rolle nicht ändern.", "error")
+        return redirect(url_for("users_list"))
+    role = request.form.get("role", "user")
+    if role not in ("admin", "user"):
+        role = "user"
+    db = get_db()
+    db.execute("UPDATE users SET role=? WHERE id=? AND role != 'promoter'", (role, uid))
+    db.commit()
+    db.close()
+    flash("Rolle aktualisiert.", "success")
+    return redirect(url_for("users_list"))
+
+
+@app.route("/users/<int:uid>/delete", methods=["POST"])
+@admin_required
+def users_delete(uid):
+    if uid == session["user_id"]:
+        flash("Du kannst dich nicht selbst löschen.", "error")
+        return redirect(url_for("users_list"))
+    db = get_db()
+    db.execute("DELETE FROM users WHERE id=? AND role != 'promoter'", (uid,))
+    db.commit()
+    db.close()
+    flash("Benutzer gelöscht.", "success")
+    return redirect(url_for("users_list"))
+
+
+@app.route("/users/<int:uid>/reset-password", methods=["POST"])
+@admin_required
+def users_reset_password(uid):
+    new_pw = request.form.get("password", "")
+    if not new_pw:
+        flash("Passwort darf nicht leer sein.", "error")
+        return redirect(url_for("users_list"))
+    db = get_db()
+    db.execute("UPDATE users SET password_hash=? WHERE id=?", (generate_password_hash(new_pw), uid))
+    db.commit()
+    db.close()
+    flash("Passwort zurückgesetzt.", "success")
+    return redirect(url_for("users_list"))
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
