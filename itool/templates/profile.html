@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Mein Profil – tkToolkit{% endblock %}
+{% block content %}
+
+<h1 class="text-lg font-semibold text-gray-600 mb-5">Mein Profil</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-3xl">
+
+  <!-- Avatar -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6 flex flex-col items-center text-center">
+    <p class="text-sm font-semibold text-gray-700 mb-4 self-start">Profilbild</p>
+    <div class="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-100 shadow mb-4">
+      {% if current_user_avatar %}
+      <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover" id="avatar-preview">
+      {% else %}
+      <div class="w-full h-full bg-[#1c3461] flex items-center justify-center">
+        <span class="text-white text-3xl font-bold">{{ (user.display_name or user.username)[0].upper() }}</span>
+      </div>
+      {% endif %}
+    </div>
+    <form method="POST" action="{{ url_for('settings_avatar') }}" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-4 py-2 rounded-xl transition-colors">
+        Bild ändern
+        <input type="file" name="avatar" accept="image/*" class="hidden" onchange="this.form.submit()">
+      </label>
+    </form>
+  </div>
+
+  <!-- Anzeigename -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+    <p class="text-sm font-semibold text-gray-700 mb-4">Anzeigename</p>
+    <form method="POST" action="{{ url_for('settings_display_name') }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Anzeigename</label>
+        <input name="display_name" value="{{ user.display_name or '' }}"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <p class="text-xs text-gray-400">Benutzername: <span class="font-medium text-gray-600">{{ user.username }}</span></p>
+      <button type="submit" class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+        Speichern
+      </button>
+    </form>
+  </div>
+
+  <!-- Passwort ändern -->
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+    <p class="text-sm font-semibold text-gray-700 mb-4">Passwort ändern</p>
+    <form method="POST" action="{{ url_for('settings_change_password') }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Aktuelles Passwort</label>
+        <input name="current_password" type="password" required
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Neues Passwort</label>
+        <input name="new_password" type="password" required minlength="6"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Passwort bestätigen</label>
+        <input name="confirm_password" type="password" required minlength="6"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <button type="submit" class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+        Passwort ändern
+      </button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

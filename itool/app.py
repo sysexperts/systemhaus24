@@ -1277,6 +1277,23 @@ def backup():
     )
 
 
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+@app.route("/profile")
+@login_required
+def profile():
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    db.close()
+    return render_template("profile.html", user=user)
+
+
+@app.route("/favicon.ico")
+@app.route("/favicon.png")
+def favicon():
+    return "", 204
+
+
 # ── User Management ───────────────────────────────────────────────────────────
 
 @app.route("/users")
@@ -1507,7 +1524,8 @@ def settings_avatar():
         db.commit()
         db.close()
         flash("Avatar gespeichert", "success")
-    return redirect(url_for("settings") + "#allgemein")
+    dest = url_for("settings") + "#allgemein" if session.get("role") == "admin" else url_for("profile")
+    return redirect(dest)
 
 
 @app.route("/settings/display-name", methods=["POST"])
@@ -1521,7 +1539,8 @@ def settings_display_name():
         db.close()
         session["display_name"] = name
         flash("Anzeigename gespeichert", "success")
-    return redirect(url_for("settings") + "#allgemein")
+    dest = url_for("settings") + "#allgemein" if session.get("role") == "admin" else url_for("profile")
+    return redirect(dest)
 
 
 @app.route("/settings/change-password", methods=["POST"])
@@ -1544,7 +1563,8 @@ def settings_change_password():
         db.commit()
         flash("Passwort erfolgreich geändert", "success")
     db.close()
-    return redirect(url_for("settings") + "#allgemein")
+    dest = url_for("settings") + "#allgemein" if session.get("role") == "admin" else url_for("profile")
+    return redirect(dest)
 
 
 @app.route("/settings/test-smtp", methods=["POST"])
