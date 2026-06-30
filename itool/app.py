@@ -10,6 +10,9 @@ import uuid
 import hmac
 import hashlib
 import secrets
+import logging
+import traceback
+from logging.handlers import RotatingFileHandler
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -73,6 +76,37 @@ def _csrf_valid():
     return expected and hmac.compare_digest(token, expected)
 
 app.jinja_env.globals["csrf_token"] = _csrf_token
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+_log_path = os.path.join(os.path.dirname(__file__), "data", "app.log")
+_file_handler = RotatingFileHandler(_log_path, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
+_file_handler.setLevel(logging.ERROR)
+_file_handler.setFormatter(logging.Formatter(
+    "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
+))
+app.logger.addHandler(_file_handler)
+app.logger.setLevel(logging.ERROR)
+
+
+@app.errorhandler(500)
+def handle_500(e):
+    tb = traceback.format_exc()
+    req_info = f"{request.method} {request.url} | User: {session.get('username', 'anonym')}"
+    app.logger.error(f"{req_info}\n{tb}")
+    try:
+        cfg = get_settings(get_db())
+        notify = cfg.get("error_notify_email", "").strip()
+        if notify and cfg.get("smtp_host", "").strip():
+            send_smtp_email(
+                notify,
+                f"[tkToolkit] Fehler: {request.path}",
+                f"Zeitpunkt: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+                f"Request: {req_info}\n\n{tb}",
+                cfg,
+            )
+    except Exception:
+        pass
+    return render_template("500.html"), 500
 
 def csrf_protect(f):
     @wraps(f)
@@ -1246,7 +1280,7 @@ SETTING_KEYS_BY_TAB = {
     ],
     "smtp": [
         "smtp_host", "smtp_port", "smtp_user", "smtp_pass",
-        "smtp_from_name", "smtp_from_email",
+        "smtp_from_name", "smtp_from_email", "error_notify_email",
     ],
     "imap": [
         "imap_host", "imap_port", "imap_user", "imap_pass",
