@@ -164,7 +164,7 @@ _CSRF_EXEMPT = {"login", "promoter_register", "static"}
 def enforce_csrf_and_session():
     # Session timeout: log out after 8h of inactivity
     if "user_id" in session:
-        last_active = session.get("_last_active", 0)
+        last_active = session.get("_last_active", time.time())
         if time.time() - last_active > 8 * 3600:
             session.clear()
             flash("Sitzung abgelaufen. Bitte erneut anmelden.", "error")
