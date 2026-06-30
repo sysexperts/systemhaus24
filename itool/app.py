@@ -165,7 +165,7 @@ def inject_globals():
         return {'app_cfg': app_cfg, 'is_kg': is_kg, 'brutto': brutto}
     messages, ticket_count, invoice_count = get_feed_data()
     db2 = get_db()
-    urow = db2.execute("SELECT avatar FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    urow = db2.execute("SELECT avatar FROM users WHERE id=%s", (session["user_id"],)).fetchone()
     payout_count = db2.execute(
         "SELECT COUNT(*) FROM promoter_payouts WHERE status='pending'"
     ).fetchone()[0]
@@ -230,30 +230,30 @@ def admin_required(f):
 
 def _calc_commission_for_invoice(db, invoice_id):
     """Check if this invoice triggers a promoter commission. Creates entry if yes."""
-    inv = db.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+    inv = db.execute("SELECT * FROM invoices WHERE id=%s", (invoice_id,)).fetchone()
     if not inv or not inv["customer_id"]:
         return
     inv_date = inv["date"]
     assignments = db.execute("""
         SELECT * FROM promoter_assignments
-        WHERE customer_id=?
-          AND start_date <= ?
-          AND (end_date IS NULL OR end_date >= ?)
+        WHERE customer_id=%s
+          AND start_date <= %s
+          AND (end_date IS NULL OR end_date >= %s)
     """, (inv["customer_id"], inv_date, inv_date)).fetchall()
     for a in assignments:
         # avoid duplicate commission for same invoice+assignment
         exists = db.execute(
-            "SELECT id FROM promoter_commissions WHERE assignment_id=? AND invoice_id=?",
+            "SELECT id FROM promoter_commissions WHERE assignment_id=%s AND invoice_id=%s",
             (a["id"], invoice_id)).fetchone()
         if exists:
             continue
         total = db.execute(
-            "SELECT COALESCE(SUM(quantity*unit_price),0) as t FROM invoice_items WHERE invoice_id=?",
+            "SELECT COALESCE(SUM(quantity*unit_price),0) as t FROM invoice_items WHERE invoice_id=%s",
             (invoice_id,)).fetchone()["t"]
         commission = round(total * a["commission_pct"] / 100, 2)
         db.execute("""
             INSERT INTO promoter_commissions (assignment_id, invoice_id, invoice_total, commission_pct, amount)
-            VALUES (?,?,?,?,?)
+            VALUES (%s,%s,%s,%s,%s)
         """, (a["id"], invoice_id, total, a["commission_pct"], commission))
 
 
@@ -286,7 +286,7 @@ def feed_send():
         attachment = safe
     if body or attachment:
         db = get_db()
-        db.execute("INSERT INTO feed_messages (user_id, username, body, attachment) VALUES (?,?,?,?)",
+        db.execute("INSERT INTO feed_messages (user_id, username, body, attachment) VALUES (%s,%s,%s,%s)",
                    (session["user_id"], session["username"], body or "", attachment))
         db.commit()
         db.close()
@@ -299,9 +299,9 @@ def feed_message_edit(mid):
     body = request.form.get("body", "").strip()
     if body:
         db = get_db()
-        msg = db.execute("SELECT user_id FROM feed_messages WHERE id=?", (mid,)).fetchone()
+        msg = db.execute("SELECT user_id FROM feed_messages WHERE id=%s", (mid,)).fetchone()
         if msg and msg["user_id"] == session["user_id"]:
-            db.execute("UPDATE feed_messages SET body=? WHERE id=?", (body, mid))
+            db.execute("UPDATE feed_messages SET body=%s WHERE id=%s", (body, mid))
             db.commit()
         db.close()
     return redirect(request.referrer or url_for("dashboard"))
@@ -311,9 +311,9 @@ def feed_message_edit(mid):
 @login_required
 def feed_message_delete(mid):
     db = get_db()
-    msg = db.execute("SELECT user_id FROM feed_messages WHERE id=?", (mid,)).fetchone()
+    msg = db.execute("SELECT user_id FROM feed_messages WHERE id=%s", (mid,)).fetchone()
     if msg and msg["user_id"] == session["user_id"]:
-        db.execute("DELETE FROM feed_messages WHERE id=?", (mid,))
+        db.execute("DELETE FROM feed_messages WHERE id=%s", (mid,))
         db.commit()
     db.close()
     return redirect(request.referrer or url_for("dashboard"))
@@ -371,7 +371,7 @@ def setup():
         db = get_db()
         phash = generate_password_hash(pw)
         db.execute(
-            "INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,?)",
+            "INSERT INTO users (username, password_hash, display_name, role) VALUES (%s,%s,%s,%s)",
             (username, phash, display or username, "admin"))
         db.commit()
         db.close()
@@ -390,7 +390,7 @@ def login():
             flash("Zu viele Anmeldeversuche. Bitte 5 Minuten warten.", "error")
             return render_template("login.html")
         db = get_db()
-        user = db.execute("SELECT * FROM users WHERE username=?", (request.form.get("username", ""),)).fetchone()
+        user = db.execute("SELECT * FROM users WHERE username=%s", (request.form.get("username", ""),)).fetchone()
         db.close()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             _clear_attempts(ip)
@@ -430,7 +430,7 @@ def dashboard():
         "revenue_month":   db.execute("""
             SELECT COALESCE(SUM(ii.quantity * ii.unit_price),0)
             FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
-            WHERE i.status IN ('sent','paid') AND strftime('%Y-%m', i.date) = strftime('%Y-%m', 'now')
+            WHERE i.status IN ('sent','paid') AND TO_CHAR(i.date::date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
         """).fetchone()[0],
         "revenue_total":   db.execute("""
             SELECT COALESCE(SUM(ii.quantity * ii.unit_price),0)
@@ -469,10 +469,10 @@ def customers():
     query = "SELECT * FROM customers WHERE 1=1"
     params = []
     if q:
-        query += " AND (name LIKE ? OR company LIKE ? OR email LIKE ?)"
+        query += " AND (name LIKE %s OR company LIKE %s OR email LIKE %s)"
         params += [f"%{q}%", f"%{q}%", f"%{q}%"]
     if status:
-        query += " AND status=?"
+        query += " AND status=%s"
         params.append(status)
     query += " ORDER BY created_at DESC"
     rows = db.execute(query, params).fetchall()
@@ -509,7 +509,7 @@ def customer_new():
              contact_person,contact_position,contact_email,contact_phone,contact_mobile,
              contract_type,support_level,contract_start,contract_end,monthly_rate,
              num_workstations,num_servers,it_notes,source,notes,status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", fields)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", fields)
         db.commit()
         db.close()
         flash("Kunde angelegt", "success")
@@ -523,16 +523,16 @@ def customer_new():
 @login_required
 def customer_edit(cid):
     db = get_db()
-    customer = db.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
+    customer = db.execute("SELECT * FROM customers WHERE id=%s", (cid,)).fetchone()
     if request.method == "POST":
         fields = _customer_fields(request.form)
         db.execute("""UPDATE customers SET
-            customer_number=?,company=?,legal_form=?,name=?,email=?,phone=?,website=?,
-            street=?,zip=?,city=?,country=?,tax_id=?,payment_terms=?,
-            contact_person=?,contact_position=?,contact_email=?,contact_phone=?,contact_mobile=?,
-            contract_type=?,support_level=?,contract_start=?,contract_end=?,monthly_rate=?,
-            num_workstations=?,num_servers=?,it_notes=?,source=?,notes=?,status=?
-            WHERE id=?""", (*fields, cid))
+            customer_number=%s,company=%s,legal_form=%s,name=%s,email=%s,phone=%s,website=%s,
+            street=%s,zip=%s,city=%s,country=%s,tax_id=%s,payment_terms=%s,
+            contact_person=%s,contact_position=%s,contact_email=%s,contact_phone=%s,contact_mobile=%s,
+            contract_type=%s,support_level=%s,contract_start=%s,contract_end=%s,monthly_rate=%s,
+            num_workstations=%s,num_servers=%s,it_notes=%s,source=%s,notes=%s,status=%s
+            WHERE id=%s""", (*fields, cid))
         db.commit()
         db.close()
         flash("Kunde gespeichert", "success")
@@ -547,14 +547,14 @@ def customer_delete(cid):
     db = get_db()
     # invoice_items cascade automatically when invoice is deleted
     inv_ids = [r[0] for r in db.execute(
-        "SELECT id FROM invoices WHERE customer_id=?", (cid,)).fetchall()]
+        "SELECT id FROM invoices WHERE customer_id=%s", (cid,)).fetchall()]
     for iid in inv_ids:
-        db.execute("DELETE FROM invoice_items WHERE invoice_id=?", (iid,))
+        db.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (iid,))
     if inv_ids:
-        db.execute(f"DELETE FROM invoices WHERE id IN ({','.join('?'*len(inv_ids))})", inv_ids)
-    db.execute("UPDATE tickets  SET customer_id=NULL WHERE customer_id=?", (cid,))
-    db.execute("DELETE FROM outreach WHERE customer_id=?", (cid,))
-    db.execute("DELETE FROM customers WHERE id=?", (cid,))
+        db.execute(f"DELETE FROM invoices WHERE id IN ({','.join('%s'*len(inv_ids))})", inv_ids)
+    db.execute("UPDATE tickets  SET customer_id=NULL WHERE customer_id=%s", (cid,))
+    db.execute("DELETE FROM outreach WHERE customer_id=%s", (cid,))
+    db.execute("DELETE FROM customers WHERE id=%s", (cid,))
     db.commit()
     db.close()
     flash("Kunde gelöscht", "success")
@@ -583,17 +583,16 @@ def invoice_new():
     db = get_db()
     if request.method == "POST":
         number = next_invoice_number()
-        db.execute("""INSERT INTO invoices (number, customer_id, date, due_date, status, notes)
-                      VALUES (?,?,?,?,?,?)""",
+        inv_id = db.execute("""INSERT INTO invoices (number, customer_id, date, due_date, status, notes)
+                      VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
                    (number, request.form["customer_id"], request.form["date"],
-                    request.form["due_date"], request.form["status"], request.form["notes"]))
-        inv_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+                    request.form["due_date"], request.form["status"], request.form["notes"])).fetchone()["id"]
         descs = request.form.getlist("desc[]")
         qtys = request.form.getlist("qty[]")
         prices = request.form.getlist("price[]")
         for desc, qty, price in zip(descs, qtys, prices):
             if desc.strip():
-                db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (?,?,?,?)",
+                db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
                            (inv_id, desc, float(qty), float(price)))
         db.commit()
         db.close()
@@ -614,10 +613,10 @@ def invoice_view(iid):
     db = get_db()
     invoice = db.execute("""SELECT i.*, c.name as customer_name, c.company, c.street, c.zip, c.city,
                                    c.country, c.email, c.tax_id as customer_tax_id
-                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=?""", (iid,)).fetchone()
-    items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (iid,)).fetchall()
+                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=%s""", (iid,)).fetchone()
+    items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=%s", (iid,)).fetchall()
     total = sum(it["quantity"] * it["unit_price"] for it in items)
-    email_log = db.execute("SELECT * FROM invoice_emails WHERE invoice_id=? ORDER BY sent_at DESC", (iid,)).fetchall()
+    email_log = db.execute("SELECT * FROM invoice_emails WHERE invoice_id=%s ORDER BY sent_at DESC", (iid,)).fetchall()
     cfg = get_settings(db)
     db.close()
     return render_template("invoice_view.html", invoice=invoice, items=items, total=total,
@@ -629,8 +628,8 @@ def generate_invoice_pdf_bytes(iid, db):
     from xhtml2pdf import pisa
     invoice = db.execute("""SELECT i.*, c.name as customer_name, c.company as customer_company,
                                    c.street, c.zip, c.city, c.email, c.tax_id as customer_tax_id
-                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=?""", (iid,)).fetchone()
-    items   = db.execute("SELECT * FROM invoice_items WHERE invoice_id=?", (iid,)).fetchall()
+                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=%s""", (iid,)).fetchone()
+    items   = db.execute("SELECT * FROM invoice_items WHERE invoice_id=%s", (iid,)).fetchall()
     total   = sum(it["quantity"] * it["unit_price"] for it in items)
     cfg     = get_settings(db)
     data_dir = os.path.join(os.path.dirname(__file__), "data")
@@ -645,7 +644,7 @@ def generate_invoice_pdf_bytes(iid, db):
 @login_required
 def invoice_pdf(iid):
     db = get_db()
-    invoice = db.execute("SELECT number FROM invoices WHERE id=?", (iid,)).fetchone()
+    invoice = db.execute("SELECT number FROM invoices WHERE id=%s", (iid,)).fetchone()
     try:
         pdf = generate_invoice_pdf_bytes(iid, db)
     finally:
@@ -660,7 +659,7 @@ def invoice_pdf(iid):
 def invoice_send_email(iid):
     db = get_db()
     invoice = db.execute("""SELECT i.*, c.name as customer_name, c.email as customer_email
-                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=?""", (iid,)).fetchone()
+                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=%s""", (iid,)).fetchone()
     to_addr = request.form.get("to_email", "").strip() or (invoice["customer_email"] if invoice else "")
     subject = request.form.get("subject", f"Rechnung {invoice['number']}").strip()
     body    = request.form.get("body", "").strip()
@@ -702,10 +701,10 @@ def invoice_send_email(iid):
                 s.ehlo(); s.starttls(); s.ehlo()
                 s.login(user, pw)
                 s.sendmail(from_email, to_addr, msg.as_string())
-        db.execute("INSERT INTO invoice_emails (invoice_id, to_addr, subject, sent_by) VALUES (?,?,?,?)",
+        db.execute("INSERT INTO invoice_emails (invoice_id, to_addr, subject, sent_by) VALUES (%s,%s,%s,%s)",
                    (iid, to_addr, subject, session["username"]))
         if invoice["status"] == "draft":
-            db.execute("UPDATE invoices SET status='sent' WHERE id=?", (iid,))
+            db.execute("UPDATE invoices SET status='sent' WHERE id=%s", (iid,))
         _calc_commission_for_invoice(db, iid)
         db.commit()
         flash(f"Rechnung als PDF an {to_addr} gesendet ✓", "success")
@@ -719,7 +718,7 @@ def invoice_send_email(iid):
 @login_required
 def invoice_status(iid, status):
     db = get_db()
-    db.execute("UPDATE invoices SET status=? WHERE id=?", (status, iid))
+    db.execute("UPDATE invoices SET status=%s WHERE id=%s", (status, iid))
     if status in ("sent", "paid"):
         _calc_commission_for_invoice(db, iid)
     db.commit()
@@ -731,7 +730,7 @@ def invoice_status(iid, status):
 @login_required
 def invoice_delete(iid):
     db = get_db()
-    db.execute("DELETE FROM invoices WHERE id=?", (iid,))
+    db.execute("DELETE FROM invoices WHERE id=%s", (iid,))
     db.commit()
     db.close()
     flash("Rechnung gelöscht", "success")
@@ -764,7 +763,7 @@ def save_setting(key, value, db=None):
         db = get_db()
     if key in _SECRET_KEYS and value:
         value = encrypt_secret(value)
-    db.execute("INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+    db.execute("INSERT INTO settings (key,value) VALUES (%s,%s) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                (key, value))
     if close:
         db.commit()
@@ -820,7 +819,7 @@ def tickets():
                LEFT JOIN customers c ON t.customer_id=c.id WHERE 1=1"""
     params = []
     if status:
-        query += " AND t.status=?"
+        query += " AND t.status=%s"
         params.append(status)
     query += " ORDER BY t.created_at DESC"
     rows = db.execute(query, params).fetchall()
@@ -834,7 +833,7 @@ def ticket_new():
     db = get_db()
     if request.method == "POST":
         db.execute("""INSERT INTO tickets (title, description, customer_id, priority, status)
-                      VALUES (?,?,?,?,?)""",
+                      VALUES (%s,%s,%s,%s,%s)""",
                    (request.form["title"], request.form["description"],
                     request.form["customer_id"] or None,
                     request.form["priority"], request.form["status"]))
@@ -851,10 +850,10 @@ def ticket_new():
 @login_required
 def ticket_edit(tid):
     db = get_db()
-    ticket = db.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
+    ticket = db.execute("SELECT * FROM tickets WHERE id=%s", (tid,)).fetchone()
     if request.method == "POST":
-        db.execute("""UPDATE tickets SET title=?, description=?, customer_id=?, priority=?, status=?,
-                      updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+        db.execute("""UPDATE tickets SET title=%s, description=%s, customer_id=%s, priority=%s, status=%s,
+                      updated_at=CURRENT_TIMESTAMP WHERE id=%s""",
                    (request.form["title"], request.form["description"],
                     request.form["customer_id"] or None,
                     request.form["priority"], request.form["status"], tid))
@@ -871,7 +870,7 @@ def ticket_edit(tid):
 @login_required
 def ticket_delete(tid):
     db = get_db()
-    db.execute("DELETE FROM tickets WHERE id=?", (tid,))
+    db.execute("DELETE FROM tickets WHERE id=%s", (tid,))
     db.commit()
     db.close()
     flash("Ticket gelöscht", "success")
@@ -886,16 +885,16 @@ def ticket_detail(tid):
         SELECT t.*, c.name as customer_name, c.email as customer_email,
                c.company as customer_company
         FROM tickets t LEFT JOIN customers c ON t.customer_id=c.id
-        WHERE t.id=?""", (tid,)).fetchone()
+        WHERE t.id=%s""", (tid,)).fetchone()
     if not ticket:
         db.close()
         flash("Ticket nicht gefunden", "error")
         return redirect(url_for("tickets"))
     updates = db.execute(
-        "SELECT * FROM ticket_updates WHERE ticket_id=? ORDER BY created_at ASC", (tid,)
+        "SELECT * FROM ticket_updates WHERE ticket_id=%s ORDER BY created_at ASC", (tid,)
     ).fetchall()
     customers = db.execute("SELECT id, name, company, email FROM customers ORDER BY name").fetchall()
-    db.execute("UPDATE tickets SET is_read=1 WHERE id=?", (tid,))
+    db.execute("UPDATE tickets SET is_read=1 WHERE id=%s", (tid,))
     db.commit()
     db.close()
     return render_template("ticket_detail.html", ticket=ticket, updates=updates, customers=customers)
@@ -913,18 +912,18 @@ def ticket_update_post(tid):
     time_minutes = hours * 60 + minutes
 
     if new_status:
-        old = db.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
+        old = db.execute("SELECT * FROM tickets WHERE id=%s", (tid,)).fetchone()
         if old and old["status"] != new_status:
             labels = {"open": "Offen", "in_progress": "In Arbeit", "closed": "Gelöst"}
             status_note = f"Status geändert: {labels.get(old['status'], old['status'])} → {labels.get(new_status, new_status)}"
             db.execute("""INSERT INTO ticket_updates (ticket_id, user_id, username, body, update_type)
-                          VALUES (?,?,?,?,?)""",
+                          VALUES (%s,%s,%s,%s,%s)""",
                        (tid, session["user_id"], session["username"], status_note, "status_change"))
 
             # auto-email customer when ticket is closed
             if new_status == "closed" and old:
                 cust = db.execute(
-                    "SELECT c.email, c.name FROM customers c WHERE c.id=?",
+                    "SELECT c.email, c.name FROM customers c WHERE c.id=%s",
                     (old["customer_id"],)).fetchone() if old["customer_id"] else None
                 if cust and cust["email"]:
                     try:
@@ -943,19 +942,19 @@ def ticket_update_post(tid):
                             close_body,
                             settings)
                         db.execute("""INSERT INTO ticket_updates (ticket_id, user_id, username, body, update_type)
-                                      VALUES (?,?,?,?,?)""",
+                                      VALUES (%s,%s,%s,%s,%s)""",
                                    (tid, session["user_id"], session["username"],
                                     f"Automatische Abschluss-Mail an {cust['email']} gesendet.", "email_sent"))
                     except Exception as e:
                         print(f"[TICKET] Abschluss-Mail Fehler: {e}")
 
-        db.execute("UPDATE tickets SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (new_status, tid))
+        db.execute("UPDATE tickets SET status=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s", (new_status, tid))
 
     if body:
         db.execute("""INSERT INTO ticket_updates (ticket_id, user_id, username, body, update_type, time_minutes)
-                      VALUES (?,?,?,?,?,?)""",
+                      VALUES (%s,%s,%s,%s,%s,%s)""",
                    (tid, session["user_id"], session["username"], body, update_type, time_minutes))
-        db.execute("UPDATE tickets SET is_read=0, updated_at=CURRENT_TIMESTAMP WHERE id=?", (tid,))
+        db.execute("UPDATE tickets SET is_read=0, updated_at=CURRENT_TIMESTAMP WHERE id=%s", (tid,))
 
     db.commit()
     db.close()
@@ -970,7 +969,7 @@ def ticket_send_email(tid):
     db = get_db()
     ticket = db.execute("""SELECT t.*, c.email as customer_email, c.name as customer_name
                             FROM tickets t LEFT JOIN customers c ON t.customer_id=c.id
-                            WHERE t.id=?""", (tid,)).fetchone()
+                            WHERE t.id=%s""", (tid,)).fetchone()
     to_addr  = request.form.get("to_email", "").strip() or (ticket["customer_email"] if ticket else "")
     default_subject = f"[#{tid}] {ticket['title'] if ticket else ''}"
     subject  = request.form.get("subject", default_subject).strip()
@@ -988,7 +987,7 @@ def ticket_send_email(tid):
         settings = get_settings(db)
         send_smtp_email(to_addr, subject, body_txt, settings)
         db.execute("""INSERT INTO ticket_updates (ticket_id, user_id, username, body, update_type)
-                      VALUES (?,?,?,?,?)""",
+                      VALUES (%s,%s,%s,%s,%s)""",
                    (tid, session["user_id"], session["username"],
                     f"E-Mail gesendet an {to_addr}\n\nBetreff: {subject}\n\n{body_txt}", "email_sent"))
         db.commit()
@@ -1021,7 +1020,7 @@ def outreach_send():
     subject = request.form["subject"]
     body = request.form["body"]
     for cid in cids:
-        db.execute("INSERT INTO outreach (customer_id, subject, body) VALUES (?,?,?)", (cid, subject, body))
+        db.execute("INSERT INTO outreach (customer_id, subject, body) VALUES (%s,%s,%s)", (cid, subject, body))
     db.commit()
     db.close()
     flash(f"{len(cids)} Anschreiben gespeichert", "success")
@@ -1045,7 +1044,7 @@ def articles_search():
     q = request.args.get("q", "")
     db = get_db()
     rows = db.execute(
-        "SELECT * FROM articles WHERE (name LIKE ? OR description LIKE ?) AND active=1 LIMIT 8",
+        "SELECT * FROM articles WHERE (name LIKE %s OR description LIKE %s) AND active=1 LIMIT 8",
         (f"%{q}%", f"%{q}%")
     ).fetchall()
     db.close()
@@ -1068,7 +1067,7 @@ def article_new():
     db = get_db()
     if request.method == "POST":
         db.execute("""INSERT INTO articles (article_number,name,description,category,unit,unit_price,tax_rate,active)
-                      VALUES (?,?,?,?,?,?,?,?)""",
+                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
                    (request.form["article_number"], request.form["name"], request.form["description"],
                     request.form["category"], request.form["unit"],
                     float(request.form["unit_price"] or 0),
@@ -1087,10 +1086,10 @@ def article_new():
 @login_required
 def article_edit(aid):
     db = get_db()
-    article = db.execute("SELECT * FROM articles WHERE id=?", (aid,)).fetchone()
+    article = db.execute("SELECT * FROM articles WHERE id=%s", (aid,)).fetchone()
     if request.method == "POST":
-        db.execute("""UPDATE articles SET article_number=?,name=?,description=?,category=?,unit=?,
-                      unit_price=?,tax_rate=?,active=? WHERE id=?""",
+        db.execute("""UPDATE articles SET article_number=%s,name=%s,description=%s,category=%s,unit=%s,
+                      unit_price=%s,tax_rate=%s,active=%s WHERE id=%s""",
                    (request.form["article_number"], request.form["name"], request.form["description"],
                     request.form["category"], request.form["unit"],
                     float(request.form["unit_price"] or 0),
@@ -1108,7 +1107,7 @@ def article_edit(aid):
 @login_required
 def article_delete(aid):
     db = get_db()
-    db.execute("DELETE FROM articles WHERE id=?", (aid,))
+    db.execute("DELETE FROM articles WHERE id=%s", (aid,))
     db.commit()
     db.close()
     flash("Leistung gelöscht", "success")
@@ -1121,7 +1120,7 @@ def _doc_breadcrumb(db, folder_id):
     crumbs = []
     fid = folder_id
     while fid:
-        row = db.execute("SELECT id, name, parent_id FROM documents WHERE id=? AND type='folder'", (fid,)).fetchone()
+        row = db.execute("SELECT id, name, parent_id FROM documents WHERE id=%s AND type='folder'", (fid,)).fetchone()
         if not row:
             break
         crumbs.insert(0, dict(row))
@@ -1135,14 +1134,14 @@ def _doc_breadcrumb(db, folder_id):
 def documents(folder_id=None):
     db = get_db()
     if folder_id:
-        folder = db.execute("SELECT * FROM documents WHERE id=? AND type='folder'", (folder_id,)).fetchone()
+        folder = db.execute("SELECT * FROM documents WHERE id=%s AND type='folder'", (folder_id,)).fetchone()
         if not folder:
             db.close()
             return redirect(url_for("documents"))
     else:
         folder = None
     items = db.execute(
-        "SELECT * FROM documents WHERE parent_id IS ? ORDER BY type DESC, name ASC",
+        "SELECT * FROM documents WHERE parent_id IS %s ORDER BY type DESC, name ASC",
         (folder_id,)
     ).fetchall()
     crumbs = _doc_breadcrumb(db, folder_id) if folder_id else []
@@ -1157,7 +1156,7 @@ def document_new_folder():
     parent_id = request.form.get("parent_id") or None
     if name:
         db = get_db()
-        db.execute("INSERT INTO documents (name, parent_id, type, uploaded_by) VALUES (?,?,?,?)",
+        db.execute("INSERT INTO documents (name, parent_id, type, uploaded_by) VALUES (%s,%s,%s,%s)",
                    (name, parent_id, "folder", session["username"]))
         db.commit()
         db.close()
@@ -1181,7 +1180,7 @@ def document_upload():
         mime, _ = mimetypes.guess_type(f.filename)
         db = get_db()
         db.execute("""INSERT INTO documents (name, parent_id, type, file_path, file_size, mime_type, uploaded_by)
-                      VALUES (?,?,?,?,?,?,?)""",
+                      VALUES (%s,%s,%s,%s,%s,%s,%s)""",
                    (f.filename, parent_id, "file", safe, size, mime or "application/octet-stream", session["username"]))
         db.commit()
         db.close()
@@ -1195,7 +1194,7 @@ def document_upload():
 @login_required
 def document_download(did):
     db = get_db()
-    doc = db.execute("SELECT * FROM documents WHERE id=? AND type='file'", (did,)).fetchone()
+    doc = db.execute("SELECT * FROM documents WHERE id=%s AND type='file'", (did,)).fetchone()
     db.close()
     if not doc:
         flash("Datei nicht gefunden", "error")
@@ -1214,7 +1213,7 @@ def document_rename(did):
     parent_id = request.form.get("parent_id") or None
     if new_name:
         db = get_db()
-        db.execute("UPDATE documents SET name=? WHERE id=?", (new_name, did))
+        db.execute("UPDATE documents SET name=%s WHERE id=%s", (new_name, did))
         db.commit()
         db.close()
     if parent_id:
@@ -1227,12 +1226,12 @@ def document_rename(did):
 def document_delete(did):
     parent_id = request.form.get("parent_id") or None
     db = get_db()
-    doc = db.execute("SELECT * FROM documents WHERE id=?", (did,)).fetchone()
+    doc = db.execute("SELECT * FROM documents WHERE id=%s", (did,)).fetchone()
     if doc and doc["type"] == "file" and doc["file_path"]:
         fp = os.path.join(DOC_STORE, doc["file_path"])
         if os.path.exists(fp):
             os.remove(fp)
-    db.execute("DELETE FROM documents WHERE id=?", (did,))
+    db.execute("DELETE FROM documents WHERE id=%s", (did,))
     db.commit()
     db.close()
     flash("Gelöscht", "success")
@@ -1283,7 +1282,7 @@ def backup():
 @login_required
 def profile():
     db = get_db()
-    user = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    user = db.execute("SELECT * FROM users WHERE id=%s", (session["user_id"],)).fetchone()
     db.close()
     return render_template("profile.html", user=user)
 
@@ -1318,12 +1317,12 @@ def users_add():
         flash("Benutzername und Passwort erforderlich.", "error")
         return redirect(url_for("users_list"))
     db = get_db()
-    if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
+    if db.execute("SELECT id FROM users WHERE username=%s", (username,)).fetchone():
         db.close()
         flash(f"Benutzername '{username}' ist bereits vergeben.", "error")
         return redirect(url_for("users_list"))
     db.execute(
-        "INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,?)",
+        "INSERT INTO users (username, password_hash, display_name, role) VALUES (%s,%s,%s,%s)",
         (username, generate_password_hash(password), display or username, role),
     )
     db.commit()
@@ -1342,7 +1341,7 @@ def users_set_role(uid):
     if role not in ("admin", "user"):
         role = "user"
     db = get_db()
-    db.execute("UPDATE users SET role=? WHERE id=? AND role != 'promoter'", (role, uid))
+    db.execute("UPDATE users SET role=%s WHERE id=%s AND role != 'promoter'", (role, uid))
     db.commit()
     db.close()
     flash("Rolle aktualisiert.", "success")
@@ -1356,7 +1355,7 @@ def users_delete(uid):
         flash("Du kannst dich nicht selbst löschen.", "error")
         return redirect(url_for("users_list"))
     db = get_db()
-    db.execute("DELETE FROM users WHERE id=? AND role != 'promoter'", (uid,))
+    db.execute("DELETE FROM users WHERE id=%s AND role != 'promoter'", (uid,))
     db.commit()
     db.close()
     flash("Benutzer gelöscht.", "success")
@@ -1371,7 +1370,7 @@ def users_reset_password(uid):
         flash("Passwort darf nicht leer sein.", "error")
         return redirect(url_for("users_list"))
     db = get_db()
-    db.execute("UPDATE users SET password_hash=? WHERE id=?", (generate_password_hash(new_pw), uid))
+    db.execute("UPDATE users SET password_hash=%s WHERE id=%s", (generate_password_hash(new_pw), uid))
     db.commit()
     db.close()
     flash("Passwort zurückgesetzt.", "success")
@@ -1492,7 +1491,7 @@ AVATAR_DIR = os.path.join(os.path.dirname(__file__), "data", "avatars")
 def user_avatar(uid):
     os.makedirs(AVATAR_DIR, exist_ok=True)
     db = get_db()
-    row = db.execute("SELECT avatar FROM users WHERE id=?", (uid,)).fetchone()
+    row = db.execute("SELECT avatar FROM users WHERE id=%s", (uid,)).fetchone()
     db.close()
     if row and row["avatar"]:
         path = os.path.join(AVATAR_DIR, row["avatar"])
@@ -1520,7 +1519,7 @@ def settings_avatar():
                 os.remove(op)
         f.save(os.path.join(AVATAR_DIR, filename))
         db = get_db()
-        db.execute("UPDATE users SET avatar=? WHERE id=?", (filename, uid))
+        db.execute("UPDATE users SET avatar=%s WHERE id=%s", (filename, uid))
         db.commit()
         db.close()
         flash("Avatar gespeichert", "success")
@@ -1534,7 +1533,7 @@ def settings_display_name():
     name = request.form.get("display_name", "").strip()
     if name:
         db = get_db()
-        db.execute("UPDATE users SET display_name=? WHERE id=?", (name, session["user_id"]))
+        db.execute("UPDATE users SET display_name=%s WHERE id=%s", (name, session["user_id"]))
         db.commit()
         db.close()
         session["display_name"] = name
@@ -1550,7 +1549,7 @@ def settings_change_password():
     new_pw   = request.form.get("new_password", "")
     confirm  = request.form.get("confirm_password", "")
     db = get_db()
-    user = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    user = db.execute("SELECT * FROM users WHERE id=%s", (session["user_id"],)).fetchone()
     if not check_password_hash(user["password_hash"], current):
         flash("Aktuelles Passwort ist falsch", "error")
     elif len(new_pw) < 6:
@@ -1558,7 +1557,7 @@ def settings_change_password():
     elif new_pw != confirm:
         flash("Passwörter stimmen nicht überein", "error")
     else:
-        db.execute("UPDATE users SET password_hash=? WHERE id=?",
+        db.execute("UPDATE users SET password_hash=%s WHERE id=%s",
                    (generate_password_hash(new_pw), session["user_id"]))
         db.commit()
         flash("Passwort erfolgreich geändert", "success")
@@ -1651,7 +1650,7 @@ def poll_imap_inbox():
                 body = (body or "").strip()[:4000]
                 # match customer by email or contact_email
                 cust = db.execute(
-                    "SELECT id FROM customers WHERE LOWER(email)=? OR LOWER(contact_email)=? LIMIT 1",
+                    "SELECT id FROM customers WHERE LOWER(email)=%s OR LOWER(contact_email)=%s LIMIT 1",
                     (from_email, from_email)).fetchone()
                 customer_id = cust["id"] if cust else None
 
@@ -1660,12 +1659,12 @@ def poll_imap_inbox():
                 tid_match = _re.search(r'\[#(\d+)\]', subject)
                 if tid_match:
                     existing_tid = int(tid_match.group(1))
-                    exists = db.execute("SELECT id FROM tickets WHERE id=?", (existing_tid,)).fetchone()
+                    exists = db.execute("SELECT id FROM tickets WHERE id=%s", (existing_tid,)).fetchone()
                     if exists:
                         db.execute("""INSERT INTO ticket_updates (ticket_id, user_id, username, body, update_type)
-                                      VALUES (?,?,?,?,?)""",
+                                      VALUES (%s,%s,%s,%s,%s)""",
                                    (existing_tid, None, from_hdr, body or "(kein Text)", "email_reply"))
-                        db.execute("UPDATE tickets SET is_read=0, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                        db.execute("UPDATE tickets SET is_read=0, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                                    (existing_tid,))
                         print(f"[IMAP] Antwort zu Ticket #{existing_tid} hinzugefügt")
                         M.store(uid, "+FLAGS", "\\Seen")
@@ -1674,7 +1673,7 @@ def poll_imap_inbox():
 
                 # no match → new ticket
                 db.execute(
-                    "INSERT INTO tickets (title, description, priority, status, customer_id, is_read) VALUES (?,?,?,?,?,0)",
+                    "INSERT INTO tickets (title, description, priority, status, customer_id, is_read) VALUES (%s,%s,%s,%s,%s,0)",
                     (subject, f"Von: {from_hdr}\n\n{body}", "medium", "open", customer_id))
                 if customer_id:
                     print(f"[IMAP] Ticket Kunde zugeordnet: {from_email} → ID {customer_id}")
@@ -1730,7 +1729,7 @@ def imap_loop():
 def promoter_register(token):
     db = get_db()
     tok = db.execute(
-        "SELECT * FROM promoter_tokens WHERE token=? AND used_by IS NULL", (token,)).fetchone()
+        "SELECT * FROM promoter_tokens WHERE token=%s AND used_by IS NULL", (token,)).fetchone()
     if not tok:
         db.close()
         return render_template("promoter_register.html", error="Ungültiger oder bereits verwendeter Link.")
@@ -1748,14 +1747,13 @@ def promoter_register(token):
             return render_template("promoter_register.html", error="Benutzername und Passwort erforderlich.")
         if pw != pw2:
             return render_template("promoter_register.html", error="Passwörter stimmen nicht überein.")
-        if db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone():
+        if db.execute("SELECT id FROM users WHERE username=%s", (username,)).fetchone():
             return render_template("promoter_register.html", error="Benutzername bereits vergeben.")
         phash = generate_password_hash(pw)
-        cur = db.execute(
-            "INSERT INTO users (username, password_hash, display_name, role) VALUES (?,?,?,?)",
-            (username, phash, display or username, "promoter"))
-        new_uid = cur.lastrowid
-        db.execute("UPDATE promoter_tokens SET used_by=?, used_at=CURRENT_TIMESTAMP WHERE id=?",
+        new_uid = db.execute(
+            "INSERT INTO users (username, password_hash, display_name, role) VALUES (%s,%s,%s,%s) RETURNING id",
+            (username, phash, display or username, "promoter")).fetchone()["id"]
+        db.execute("UPDATE promoter_tokens SET used_by=%s, used_at=CURRENT_TIMESTAMP WHERE id=%s",
                    (new_uid, tok["id"]))
         db.commit()
         db.close()
@@ -1806,7 +1804,7 @@ def promoters():
 def promoter_generate_link():
     db = get_db()
     token = uuid.uuid4().hex
-    db.execute("INSERT INTO promoter_tokens (token, created_by) VALUES (?,?)",
+    db.execute("INSERT INTO promoter_tokens (token, created_by) VALUES (%s,%s)",
                (token, session["user_id"]))
     db.commit()
     db.close()
@@ -1818,7 +1816,7 @@ def promoter_generate_link():
 @admin_required
 def promoter_detail(pid):
     db = get_db()
-    promoter = db.execute("SELECT * FROM users WHERE id=? AND role='promoter'", (pid,)).fetchone()
+    promoter = db.execute("SELECT * FROM users WHERE id=%s AND role='promoter'", (pid,)).fetchone()
     if not promoter:
         db.close()
         flash("Promoter nicht gefunden.", "error")
@@ -1827,7 +1825,7 @@ def promoter_detail(pid):
         SELECT pa.*, c.name as customer_name, c.company as customer_company
         FROM promoter_assignments pa
         JOIN customers c ON c.id = pa.customer_id
-        WHERE pa.promoter_id=?
+        WHERE pa.promoter_id=%s
         ORDER BY pa.created_at DESC
     """, (pid,)).fetchall()
     commissions = db.execute("""
@@ -1837,14 +1835,14 @@ def promoter_detail(pid):
         JOIN promoter_assignments pa ON pa.id = pc.assignment_id
         JOIN invoices i ON i.id = pc.invoice_id
         JOIN customers c ON c.id = pa.customer_id
-        WHERE pa.promoter_id=?
+        WHERE pa.promoter_id=%s
         ORDER BY pc.created_at DESC
     """, (pid,)).fetchall()
     payouts = db.execute("""
         SELECT pp.*, u.username as decided_by_name
         FROM promoter_payouts pp
         LEFT JOIN users u ON u.id = pp.decided_by
-        WHERE pp.promoter_id=?
+        WHERE pp.promoter_id=%s
         ORDER BY pp.requested_at DESC
     """, (pid,)).fetchall()
     total_earned   = sum(c["amount"] for c in commissions)
@@ -1868,7 +1866,7 @@ def promoter_assign(pid):
     db = get_db()
     db.execute("""
         INSERT INTO promoter_assignments (promoter_id, customer_id, commission_pct, start_date, end_date, notes, created_by)
-        VALUES (?,?,?,?,?,?,?)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
     """, (pid,
           request.form["customer_id"],
           float(request.form.get("commission_pct", 25)),
@@ -1886,8 +1884,8 @@ def promoter_assign(pid):
 @admin_required
 def promoter_assignment_delete(aid):
     db = get_db()
-    row = db.execute("SELECT promoter_id FROM promoter_assignments WHERE id=?", (aid,)).fetchone()
-    db.execute("DELETE FROM promoter_assignments WHERE id=?", (aid,))
+    row = db.execute("SELECT promoter_id FROM promoter_assignments WHERE id=%s", (aid,)).fetchone()
+    db.execute("DELETE FROM promoter_assignments WHERE id=%s", (aid,))
     db.commit()
     db.close()
     flash("Zuweisung entfernt.", "success")
@@ -1901,20 +1899,20 @@ def promoter_payout_decide(poid):
     decision = request.form.get("decision")  # approved / rejected
     notes    = request.form.get("admin_notes", "")
     db = get_db()
-    payout = db.execute("SELECT * FROM promoter_payouts WHERE id=?", (poid,)).fetchone()
+    payout = db.execute("SELECT * FROM promoter_payouts WHERE id=%s", (poid,)).fetchone()
     if payout and decision in ("approved", "rejected"):
         db.execute("""
             UPDATE promoter_payouts
-            SET status=?, decided_at=CURRENT_TIMESTAMP, decided_by=?, admin_notes=?
-            WHERE id=?
+            SET status=%s, decided_at=CURRENT_TIMESTAMP, decided_by=%s, admin_notes=%s
+            WHERE id=%s
         """, (decision, session["user_id"], notes, poid))
         if decision == "approved":
             # mark commissions as paid
             db.execute("""
-                UPDATE promoter_commissions SET payout_id=?
+                UPDATE promoter_commissions SET payout_id=%s
                 WHERE payout_id IS NULL
                   AND assignment_id IN (
-                    SELECT id FROM promoter_assignments WHERE promoter_id=?
+                    SELECT id FROM promoter_assignments WHERE promoter_id=%s
                   )
             """, (poid, payout["promoter_id"]))
         db.commit()
@@ -1940,21 +1938,21 @@ def promoter_dashboard():
         JOIN promoter_assignments pa ON pa.id = pc.assignment_id
         JOIN invoices i ON i.id = pc.invoice_id
         JOIN customers c ON c.id = pa.customer_id
-        WHERE pa.promoter_id=?
+        WHERE pa.promoter_id=%s
         ORDER BY pc.created_at DESC
     """, (pid,)).fetchall()
     payouts = db.execute("""
         SELECT pp.*, u.username as decided_by_name
         FROM promoter_payouts pp
         LEFT JOIN users u ON u.id = pp.decided_by
-        WHERE pp.promoter_id=?
+        WHERE pp.promoter_id=%s
         ORDER BY pp.requested_at DESC
     """, (pid,)).fetchall()
     assignments = db.execute("""
         SELECT pa.*, c.name as customer_name, c.company as customer_company
         FROM promoter_assignments pa
         JOIN customers c ON c.id = pa.customer_id
-        WHERE pa.promoter_id=?
+        WHERE pa.promoter_id=%s
     """, (pid,)).fetchall()
     total_earned  = sum(c["amount"] for c in commissions)
     total_paid    = sum(p["amount"] for p in payouts if p["status"] == "approved")
@@ -1979,18 +1977,18 @@ def promoter_request_payout():
     earned = db.execute("""
         SELECT COALESCE(SUM(pc.amount),0) as t FROM promoter_commissions pc
         JOIN promoter_assignments pa ON pa.id=pc.assignment_id
-        WHERE pa.promoter_id=?
+        WHERE pa.promoter_id=%s
     """, (pid,)).fetchone()["t"]
     paid_or_pending = db.execute("""
         SELECT COALESCE(SUM(amount),0) as t FROM promoter_payouts
-        WHERE promoter_id=? AND status IN ('approved','pending')
+        WHERE promoter_id=%s AND status IN ('approved','pending')
     """, (pid,)).fetchone()["t"]
     balance = round(earned - paid_or_pending, 2)
     if balance <= 0:
         flash("Kein auszahlbares Guthaben vorhanden.", "error")
         db.close()
         return redirect(url_for("promoter_dashboard"))
-    db.execute("INSERT INTO promoter_payouts (promoter_id, amount) VALUES (?,?)", (pid, balance))
+    db.execute("INSERT INTO promoter_payouts (promoter_id, amount) VALUES (%s,%s)", (pid, balance))
     db.commit()
     db.close()
     flash(f"Auszahlungsantrag über {balance:.2f} € wurde gesendet.", "success")
@@ -2031,7 +2029,7 @@ def time_report():
         JOIN tickets t ON t.id = tu.ticket_id
         LEFT JOIN customers c ON c.id = t.customer_id
         WHERE tu.time_minutes > 0
-          AND DATE(tu.created_at) BETWEEN ? AND ?
+          AND DATE(tu.created_at) BETWEEN %s AND %s
         ORDER BY tu.created_at DESC
     """, (date_from, date_to)).fetchall()
 
@@ -2080,29 +2078,29 @@ def accounting():
         ).fetchone()[0]
 
     stats = {
-        "revenue_month":    revenue("WHERE i.status IN ('sent','paid') AND strftime('%Y-%m',i.date)=?",
+        "revenue_month":    revenue("WHERE i.status IN ('sent','paid') AND TO_CHAR(i.date::date,'YYYY-MM')=%s",
                                     (now.strftime("%Y-%m"),)),
-        "revenue_year":     revenue("WHERE i.status IN ('sent','paid') AND strftime('%Y',i.date)=?",
+        "revenue_year":     revenue("WHERE i.status IN ('sent','paid') AND TO_CHAR(i.date::date,'YYYY')=%s",
                                     (now.strftime("%Y"),)),
         "revenue_total":    revenue("WHERE i.status IN ('sent','paid')"),
         "outstanding":      revenue("WHERE i.status='sent'"),
-        "paid_month":       revenue("WHERE i.status='paid' AND strftime('%Y-%m',i.date)=?",
+        "paid_month":       revenue("WHERE i.status='paid' AND TO_CHAR(i.date::date,'YYYY-MM')=%s",
                                     (now.strftime("%Y-%m"),)),
         "draft_total":      revenue("WHERE i.status='draft'"),
         "count_sent":       db.execute("SELECT COUNT(*) FROM invoices WHERE status='sent'").fetchone()[0],
-        "count_paid_month": db.execute("SELECT COUNT(*) FROM invoices WHERE status='paid' AND strftime('%Y-%m',date)=?",
+        "count_paid_month": db.execute("SELECT COUNT(*) FROM invoices WHERE status='paid' AND TO_CHAR(date::date,'YYYY-MM')=%s",
                                        (now.strftime("%Y-%m"),)).fetchone()[0],
         "count_draft":      db.execute("SELECT COUNT(*) FROM invoices WHERE status='draft'").fetchone()[0],
     }
 
     # Monthly revenue for last 12 months
     monthly = db.execute("""
-        SELECT strftime('%Y-%m', i.date) as month,
+        SELECT TO_CHAR(i.date::date, 'YYYY-MM') as month,
                SUM(ii.quantity*ii.unit_price) as total,
                COUNT(DISTINCT i.id) as count
         FROM invoices i JOIN invoice_items ii ON ii.invoice_id=i.id
         WHERE i.status IN ('sent','paid')
-          AND i.date >= date('now','-12 months')
+          AND i.date::date >= CURRENT_DATE - INTERVAL '12 months'
         GROUP BY month ORDER BY month
     """).fetchall()
 
@@ -2228,7 +2226,7 @@ def expense_new():
 
     db = get_db()
     db.execute(
-        "INSERT INTO expenses (date, category, description, amount_netto, tax_rate, receipt_file, notes) VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO expenses (date, category, description, amount_netto, tax_rate, receipt_file, notes) VALUES (%s,%s,%s,%s,%s,%s,%s)",
         (date, category, description, amount_netto, tax_rate, receipt_filename, notes)
     )
     db.commit()
@@ -2241,12 +2239,12 @@ def expense_new():
 @login_required
 def expense_delete(eid):
     db = get_db()
-    row = db.execute("SELECT receipt_file FROM expenses WHERE id=?", (eid,)).fetchone()
+    row = db.execute("SELECT receipt_file FROM expenses WHERE id=%s", (eid,)).fetchone()
     if row and row["receipt_file"]:
         path = os.path.join(RECEIPT_DIR, row["receipt_file"])
         if os.path.isfile(path):
             os.remove(path)
-    db.execute("DELETE FROM expenses WHERE id=?", (eid,))
+    db.execute("DELETE FROM expenses WHERE id=%s", (eid,))
     db.commit()
     db.close()
     flash("Ausgabe gelöscht.", "success")
@@ -2257,7 +2255,7 @@ def expense_delete(eid):
 @login_required
 def expense_receipt(eid):
     db = get_db()
-    row = db.execute("SELECT receipt_file FROM expenses WHERE id=?", (eid,)).fetchone()
+    row = db.execute("SELECT receipt_file FROM expenses WHERE id=%s", (eid,)).fetchone()
     db.close()
     if not row or not row["receipt_file"]:
         return "Kein Beleg vorhanden", 404
@@ -2287,19 +2285,18 @@ def _create_invoice_from_recurring(db, rec):
     """Create an actual invoice from a recurring template."""
     num = next_invoice_number()
     due = (date.fromisoformat(rec["next_date"]) + __import__('datetime').timedelta(days=14)).isoformat()
-    cur = db.execute(
-        "INSERT INTO invoices (number, customer_id, date, due_date, status, notes) VALUES (?,?,?,?,?,?)",
+    inv_id = db.execute(
+        "INSERT INTO invoices (number, customer_id, date, due_date, status, notes) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
         (num, rec["customer_id"], rec["next_date"], due, "draft",
          f"Automatisch erstellt aus Vorlage: {rec['name']}")
-    )
-    inv_id = cur.lastrowid
-    items = db.execute("SELECT * FROM recurring_invoice_items WHERE recurring_id=?", (rec["id"],)).fetchall()
+    ).fetchone()["id"]
+    items = db.execute("SELECT * FROM recurring_invoice_items WHERE recurring_id=%s", (rec["id"],)).fetchall()
     for it in items:
-        db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (?,?,?,?)",
+        db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
                    (inv_id, it["description"], it["quantity"], it["unit_price"]))
     # Advance next_date
     new_next = _next_date(rec["next_date"], rec["interval"])
-    db.execute("UPDATE recurring_invoices SET next_date=?, last_created=? WHERE id=?",
+    db.execute("UPDATE recurring_invoices SET next_date=%s, last_created=%s WHERE id=%s",
                (new_next, rec["next_date"], rec["id"]))
     print(f"[RECURRING] Rechnung {num} für Vorlage '{rec['name']}' erstellt (nächste: {new_next})")
     return inv_id
@@ -2312,7 +2309,7 @@ def check_recurring_invoices():
             db = get_db()
             today = date.today().isoformat()
             due = db.execute(
-                "SELECT * FROM recurring_invoices WHERE status='active' AND next_date<=?", (today,)
+                "SELECT * FROM recurring_invoices WHERE status='active' AND next_date<=%s", (today,)
             ).fetchall()
             for rec in due:
                 _create_invoice_from_recurring(db, rec)
@@ -2359,11 +2356,10 @@ def recurring_new():
         return redirect(url_for("recurring_list"))
 
     db = get_db()
-    cur = db.execute(
-        "INSERT INTO recurring_invoices (customer_id, name, interval, day_of_month, next_date, notes) VALUES (?,?,?,?,?,?)",
+    rid = db.execute(
+        "INSERT INTO recurring_invoices (customer_id, name, interval, day_of_month, next_date, notes) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
         (customer_id, name, interval, int(start_date.split("-")[2]), start_date, notes)
-    )
-    rid = cur.lastrowid
+    ).fetchone()["id"]
     for desc, qty, price in zip(descriptions, quantities, prices):
         desc = desc.strip()
         if not desc:
@@ -2373,7 +2369,7 @@ def recurring_new():
             price = float(price or 0)
         except ValueError:
             continue
-        db.execute("INSERT INTO recurring_invoice_items (recurring_id, description, quantity, unit_price) VALUES (?,?,?,?)",
+        db.execute("INSERT INTO recurring_invoice_items (recurring_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
                    (rid, desc, qty, price))
     db.commit()
     db.close()
@@ -2385,10 +2381,10 @@ def recurring_new():
 @login_required
 def recurring_toggle(rid):
     db = get_db()
-    rec = db.execute("SELECT status FROM recurring_invoices WHERE id=?", (rid,)).fetchone()
+    rec = db.execute("SELECT status FROM recurring_invoices WHERE id=%s", (rid,)).fetchone()
     if rec:
         new_status = "paused" if rec["status"] == "active" else "active"
-        db.execute("UPDATE recurring_invoices SET status=? WHERE id=?", (new_status, rid))
+        db.execute("UPDATE recurring_invoices SET status=%s WHERE id=%s", (new_status, rid))
         db.commit()
     db.close()
     return redirect(url_for("recurring_list"))
@@ -2398,7 +2394,7 @@ def recurring_toggle(rid):
 @login_required
 def recurring_run_now(rid):
     db = get_db()
-    rec = db.execute("SELECT * FROM recurring_invoices WHERE id=?", (rid,)).fetchone()
+    rec = db.execute("SELECT * FROM recurring_invoices WHERE id=%s", (rid,)).fetchone()
     if rec:
         inv_id = _create_invoice_from_recurring(db, rec)
         db.commit()
@@ -2414,7 +2410,7 @@ def recurring_run_now(rid):
 @login_required
 def recurring_delete(rid):
     db = get_db()
-    db.execute("DELETE FROM recurring_invoices WHERE id=?", (rid,))
+    db.execute("DELETE FROM recurring_invoices WHERE id=%s", (rid,))
     db.commit()
     db.close()
     flash("Vorlage gelöscht.", "success")
@@ -2484,7 +2480,7 @@ def akquise_new():
     db.execute("""
         INSERT INTO leads (company, contact_name, contact_email, contact_phone,
                            source, stage, deal_value, notes, next_followup)
-        VALUES (?,?,?,?,?,?,?,?,?)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         request.form.get("company", "").strip(),
         request.form.get("contact_name", "").strip(),
@@ -2506,13 +2502,13 @@ def akquise_new():
 @login_required
 def akquise_detail(lid):
     db = get_db()
-    lead = db.execute("SELECT * FROM leads WHERE id=?", (lid,)).fetchone()
+    lead = db.execute("SELECT * FROM leads WHERE id=%s", (lid,)).fetchone()
     if not lead:
         db.close()
         flash("Lead nicht gefunden.", "error")
         return redirect(url_for("akquise"))
     activities = db.execute(
-        "SELECT * FROM lead_activities WHERE lead_id=? ORDER BY created_at DESC", (lid,)
+        "SELECT * FROM lead_activities WHERE lead_id=%s ORDER BY created_at DESC", (lid,)
     ).fetchall()
     db.close()
     return render_template("akquise_detail.html", lead=lead, activities=activities,
@@ -2527,11 +2523,11 @@ def akquise_stage(lid):
         abort(400)
     lost_reason = request.form.get("lost_reason", "").strip()
     db = get_db()
-    db.execute("UPDATE leads SET stage=?, lost_reason=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+    db.execute("UPDATE leads SET stage=%s, lost_reason=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                (new_stage, lost_reason if new_stage == "lost" else None, lid))
     # Auto-activity log
     labels = {s[0]: s[1] for s in LEAD_STAGES}
-    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (?,?,?,?)",
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
                (lid, "stage", f"Status geändert → {labels.get(new_stage, new_stage)}", session["username"]))
     db.commit()
     db.close()
@@ -2547,9 +2543,9 @@ def akquise_activity(lid):
     if not body:
         return redirect(url_for("akquise_detail", lid=lid))
     db = get_db()
-    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (?,?,?,?)",
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
                (lid, atype, body, session["username"]))
-    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=? WHERE id=?",
+    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=%s WHERE id=%s",
                (followup, lid))
     db.commit()
     db.close()
@@ -2560,9 +2556,9 @@ def akquise_activity(lid):
 @login_required
 def akquise_edit(lid):
     db = get_db()
-    db.execute("""UPDATE leads SET company=?, contact_name=?, contact_email=?,
-                  contact_phone=?, source=?, deal_value=?, notes=?, next_followup=?,
-                  updated_at=CURRENT_TIMESTAMP WHERE id=?""", (
+    db.execute("""UPDATE leads SET company=%s, contact_name=%s, contact_email=%s,
+                  contact_phone=%s, source=%s, deal_value=%s, notes=%s, next_followup=%s,
+                  updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (
         request.form.get("company", "").strip(),
         request.form.get("contact_name", "").strip(),
         request.form.get("contact_email", "").strip(),
@@ -2583,7 +2579,7 @@ def akquise_edit(lid):
 @login_required
 def akquise_delete(lid):
     db = get_db()
-    db.execute("DELETE FROM leads WHERE id=?", (lid,))
+    db.execute("DELETE FROM leads WHERE id=%s", (lid,))
     db.commit()
     db.close()
     flash("Lead gelöscht.", "success")
@@ -2595,14 +2591,14 @@ def akquise_delete(lid):
 def akquise_convert(lid):
     """Convert a won lead into a customer."""
     db = get_db()
-    lead = db.execute("SELECT * FROM leads WHERE id=?", (lid,)).fetchone()
+    lead = db.execute("SELECT * FROM leads WHERE id=%s", (lid,)).fetchone()
     if not lead:
         db.close()
         flash("Lead nicht gefunden.", "error")
         return redirect(url_for("akquise"))
     cnum = next_customer_number(db)
     db.execute("""INSERT INTO customers (customer_number, name, company, email, phone, source, status)
-                  VALUES (?,?,?,?,?,?,?)""", (
+                  VALUES (%s,%s,%s,%s,%s,%s,%s)""", (
         cnum,
         lead["contact_name"],
         lead["company"] or "",
@@ -2611,8 +2607,8 @@ def akquise_convert(lid):
         lead["source"] or "",
         "customer",
     ))
-    db.execute("UPDATE leads SET stage='won', updated_at=CURRENT_TIMESTAMP WHERE id=?", (lid,))
-    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (?,?,?,?)",
+    db.execute("UPDATE leads SET stage='won', updated_at=CURRENT_TIMESTAMP WHERE id=%s", (lid,))
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
                (lid, "converted", f"In Kunde umgewandelt (Kundennr. {cnum})", session["username"]))
     db.commit()
     db.close()
