@@ -29,6 +29,42 @@ if not _secret or _secret == "dev-secret-key":
     _secret = secrets.token_hex(32)
 app.secret_key = _secret
 
+# Session security
+app.config.update(
+    SESSION_COOKIE_HTTPONLY  = True,
+    SESSION_COOKIE_SAMESITE  = "Lax",
+    SESSION_COOKIE_SECURE    = False,   # set True when serving over HTTPS
+    PERMANENT_SESSION_LIFETIME = 8 * 3600,  # 8 hours
+    MAX_CONTENT_LENGTH       = 20 * 1024 * 1024,  # 20 MB upload limit
+)
+
+# Password encryption for DB-stored secrets (SMTP/IMAP)
+def _fernet():
+    """Derive a Fernet-compatible key from SECRET_KEY."""
+    import base64
+    raw = hashlib.sha256(app.secret_key.encode()).digest()
+    return base64.urlsafe_b64encode(raw)
+
+def encrypt_secret(plaintext: str) -> str:
+    if not plaintext:
+        return ""
+    key = _fernet()
+    # Simple XOR-based encryption using HMAC key stream (no extra deps)
+    import base64
+    k = hashlib.sha256(key).digest()
+    data = plaintext.encode()
+    encrypted = bytes(b ^ k[i % len(k)] for i, b in enumerate(data))
+    return "enc:" + base64.urlsafe_b64encode(encrypted).decode()
+
+def decrypt_secret(ciphertext: str) -> str:
+    if not ciphertext or not ciphertext.startswith("enc:"):
+        return ciphertext or ""
+    import base64
+    key = _fernet()
+    k = hashlib.sha256(key).digest()
+    encrypted = base64.urlsafe_b64decode(ciphertext[4:])
+    return bytes(b ^ k[i % len(k)] for i, b in enumerate(encrypted)).decode()
+
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 
 def _csrf_token():
@@ -125,14 +161,24 @@ def login_required(f):
 _CSRF_EXEMPT = {"login", "promoter_register", "static"}
 
 @app.before_request
-def enforce_csrf():
+def enforce_csrf_and_session():
+    # Session timeout: log out after 8h of inactivity
+    if "user_id" in session:
+        last_active = session.get("_last_active", 0)
+        if time.time() - last_active > 8 * 3600:
+            session.clear()
+            flash("Sitzung abgelaufen. Bitte erneut anmelden.", "error")
+            return redirect(url_for("login"))
+        session["_last_active"] = time.time()
+
+    # CSRF
     if request.method not in ("POST", "PUT", "DELETE", "PATCH"):
         return
     endpoint = request.endpoint or ""
     if endpoint in _CSRF_EXEMPT:
         return
     if "user_id" not in session:
-        return  # unauthenticated requests handled by login_required
+        return
     if not _csrf_valid():
         abort(403)
 
@@ -625,12 +671,19 @@ def invoice_delete(iid):
 
 # ── Settings helpers ──────────────────────────────────────────────────────────
 
+_SECRET_KEYS = {"smtp_pass", "imap_pass"}
+
 def get_settings(db=None):
     close = db is None
     if db is None:
         db = get_db()
     rows = db.execute("SELECT key, value FROM settings").fetchall()
-    result = {r["key"]: r["value"] for r in rows}
+    result = {}
+    for r in rows:
+        v = r["value"]
+        if r["key"] in _SECRET_KEYS:
+            v = decrypt_secret(v)
+        result[r["key"]] = v
     if close:
         db.close()
     return result
@@ -640,6 +693,8 @@ def save_setting(key, value, db=None):
     close = db is None
     if db is None:
         db = get_db()
+    if key in _SECRET_KEYS and value:
+        value = encrypt_secret(value)
     db.execute("INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                (key, value))
     if close:
@@ -1076,8 +1131,11 @@ def document_download(did):
     if not doc:
         flash("Datei nicht gefunden", "error")
         return redirect(url_for("documents"))
-    path = os.path.join(DOC_STORE, doc["file_path"])
-    return send_file(path, as_attachment=True, download_name=doc["name"])
+    safe_fp = os.path.basename(doc["file_path"])
+    if not safe_fp:
+        abort(400)
+    return send_from_directory(DOC_STORE, safe_fp, as_attachment=True,
+                               download_name=secure_filename(doc["name"] or safe_fp))
 
 
 @app.route("/documents/<int:did>/rename", methods=["POST"])
@@ -1129,10 +1187,21 @@ def api_counts():
 @app.route("/backup")
 @login_required
 def backup():
-    src = os.path.join(os.path.dirname(__file__), "data", "itool.db")
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    src = os.path.join(data_dir, "itool.db")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dst = os.path.join(os.path.dirname(__file__), "data", f"backup_{ts}.db")
+    dst = os.path.join(data_dir, f"backup_{ts}.db")
     shutil.copy2(src, dst)
+    # Clean up old backups — keep only the 3 most recent
+    backups = sorted(
+        [f for f in os.listdir(data_dir) if f.startswith("backup_") and f.endswith(".db")],
+        reverse=True
+    )
+    for old in backups[3:]:
+        try:
+            os.remove(os.path.join(data_dir, old))
+        except OSError:
+            pass
     return send_file(dst, as_attachment=True, download_name=f"itool_backup_{ts}.db")
 
 
