@@ -14,6 +14,24 @@ def _conn_params():
     }
 
 
+class _Row(dict):
+    """Dict row that also supports numeric index access like sqlite3.Row."""
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class _RowCursor(psycopg2.extras.RealDictCursor):
+    """RealDictCursor that returns _Row instances."""
+    def fetchone(self):
+        row = super().fetchone()
+        return _Row(row) if row is not None else None
+
+    def fetchall(self):
+        return [_Row(r) for r in super().fetchall()]
+
+
 class _Cursor:
     """Thin cursor wrapper to behave like sqlite3 cursor."""
     def __init__(self, cur):
@@ -43,7 +61,7 @@ class _Connection:
         self._conn = conn
 
     def execute(self, sql, params=None):
-        cur = self._conn.cursor()
+        cur = self._conn.cursor(cursor_factory=_RowCursor)
         cur.execute(sql, params or ())
         return _Cursor(cur)
 
@@ -66,7 +84,7 @@ class _Connection:
 def get_db():
     conn = psycopg2.connect(
         **_conn_params(),
-        cursor_factory=psycopg2.extras.RealDictCursor,
+        cursor_factory=_RowCursor,
     )
     conn.autocommit = False
     return _Connection(conn)
