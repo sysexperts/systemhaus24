@@ -427,6 +427,11 @@ def dashboard():
         "tickets_progress":db.execute("SELECT COUNT(*) FROM tickets WHERE status='in_progress'").fetchone()[0],
         "invoices_unpaid": db.execute("SELECT COUNT(*) FROM invoices WHERE status='sent'").fetchone()[0],
         "invoices_draft":  db.execute("SELECT COUNT(*) FROM invoices WHERE status='draft'").fetchone()[0],
+        "invoices_open_amount": db.execute("""
+            SELECT COALESCE(SUM(ii.quantity * ii.unit_price),0)
+            FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
+            WHERE i.status = 'sent'
+        """).fetchone()[0],
         "revenue_month":   db.execute("""
             SELECT COALESCE(SUM(ii.quantity * ii.unit_price),0)
             FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
@@ -472,10 +477,18 @@ def dashboard():
     month_names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
     rev_by_month = {int(r['mon']): float(r['total']) for r in revenue_rows}
     all_months = [{'label': month_names[m-1], 'total': rev_by_month.get(m, 0.0)} for m in range(1, 13)]
+    upcoming_recurring = db.execute("""
+        SELECT r.id, r.name, r.next_date, r.interval, c.name as customer_name, c.company as customer_company,
+               COALESCE((SELECT SUM(quantity*unit_price) FROM recurring_invoice_items WHERE recurring_id=r.id),0) as total
+        FROM recurring_invoices r LEFT JOIN customers c ON r.customer_id = c.id
+        WHERE r.status = 'active' AND r.next_date::date <= CURRENT_DATE + INTERVAL '14 days'
+        ORDER BY r.next_date ASC LIMIT 5
+    """).fetchall()
     db.close()
     return render_template("dashboard.html", stats=stats,
                            recent_tickets=recent_tickets, recent_invoices=recent_invoices,
                            overdue_invoices=overdue_invoices, revenue_months=all_months,
+                           upcoming_recurring=upcoming_recurring,
                            current_year=current_year, now_hour=datetime.now().hour)
 
 
