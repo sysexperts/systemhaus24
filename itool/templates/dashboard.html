@@ -27,6 +27,27 @@
   </div>
 </div>
 
+<!-- Überfällige Rechnungen -->
+{% if overdue_invoices %}
+<div class="mb-5 bg-red-50 border border-red-200 rounded-2xl overflow-hidden">
+  <div class="flex items-center gap-3 px-5 py-3 border-b border-red-100">
+    <svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+    <span class="text-sm font-semibold text-red-700">{{ overdue_invoices|length }} überfällige Rechnung{{ 'en' if overdue_invoices|length != 1 else '' }}</span>
+  </div>
+  <div class="divide-y divide-red-100">
+    {% for inv in overdue_invoices %}
+    <a href="{{ url_for('invoice_view', iid=inv.id) }}"
+       class="flex items-center gap-3 px-5 py-2.5 hover:bg-red-100/50 transition-colors">
+      <span class="text-xs font-semibold text-red-600 w-24 shrink-0">{{ inv.number }}</span>
+      <span class="text-xs text-red-700 flex-1 truncate">{{ inv.customer_company or inv.customer_name or '–' }}</span>
+      <span class="text-xs text-red-500 shrink-0">{{ '%.2f'|format(brutto(inv.total)) }} €</span>
+      <span class="text-xs bg-red-200 text-red-700 px-2 py-0.5 rounded-full shrink-0 font-medium">{{ inv.overdue_days }}T überfällig</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <!-- KPI Cards -->
 <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
 
@@ -77,6 +98,33 @@
     <p class="text-emerald-200 text-xs mt-1">Gesamt: {{ '%.2f'|format(brutto(stats.revenue_total)) }} €{% if not is_kg %} brutto{% endif %}</p>
   </div>
 </div>
+
+<!-- Umsatz-Trend -->
+{% if revenue_months %}
+{% set max_rev = revenue_months | map(attribute='total') | max %}
+<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+      <h2 class="text-sm font-semibold text-gray-700">Umsatz der letzten 6 Monate</h2>
+    </div>
+    <a href="{{ url_for('accounting') }}" class="text-xs text-blue-500 hover:underline">Buchhaltung →</a>
+  </div>
+  <div class="flex items-end gap-2 h-28">
+    {% for m in revenue_months %}
+    {% set pct = ((m.total / max_rev * 100) | int) if max_rev > 0 else 0 %}
+    <div class="flex-1 flex flex-col items-center gap-1 group">
+      <span class="text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+        {{ '%.0f'|format(brutto(m.total)) }} €
+      </span>
+      <div class="w-full rounded-t-lg bg-gradient-to-t from-[#1c3461] to-[#2a6a8a] transition-all"
+           style="height: {{ [pct, 4] | max }}%; min-height: 4px; max-height: 100%;"></div>
+      <span class="text-xs text-gray-400">{{ m.label }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <!-- Main content: Tickets + Rechnungen + Quick Actions -->
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">

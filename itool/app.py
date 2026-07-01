@@ -451,10 +451,37 @@ def dashboard():
         FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id
         ORDER BY i.created_at DESC LIMIT 5
     """).fetchall()
-    from datetime import datetime
+    overdue_invoices = db.execute("""
+        SELECT i.id, i.number, i.due_date, c.name as customer_name, c.company as customer_company,
+               COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as total,
+               (CURRENT_DATE - i.due_date::date) as overdue_days
+        FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id
+        WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date::date < CURRENT_DATE
+        ORDER BY i.due_date ASC
+    """).fetchall()
+    revenue_months = db.execute("""
+        SELECT TO_CHAR(i.date::date, 'YYYY-MM') as month,
+               TO_CHAR(i.date::date, 'Mon') as label,
+               COALESCE(SUM(ii.quantity * ii.unit_price), 0) as total
+        FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
+        WHERE i.status IN ('sent','paid')
+          AND i.date::date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'
+        GROUP BY TO_CHAR(i.date::date, 'YYYY-MM'), TO_CHAR(i.date::date, 'Mon')
+        ORDER BY month ASC
+    """).fetchall()
+    from datetime import datetime, timedelta
+    # fill in missing months with 0
+    all_months = []
+    for offset in range(5, -1, -1):
+        d = (datetime.now().replace(day=1) - timedelta(days=offset*28)).replace(day=1)
+        key = d.strftime('%Y-%m')
+        label = d.strftime('%b')
+        found = next((r for r in revenue_months if r['month'] == key), None)
+        all_months.append({'label': label, 'total': float(found['total']) if found else 0.0})
     db.close()
     return render_template("dashboard.html", stats=stats,
                            recent_tickets=recent_tickets, recent_invoices=recent_invoices,
+                           overdue_invoices=overdue_invoices, revenue_months=all_months,
                            now_hour=datetime.now().hour)
 
 
