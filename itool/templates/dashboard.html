@@ -110,16 +110,17 @@
     </div>
     <a href="{{ url_for('accounting') }}" class="text-xs text-blue-500 hover:underline">Buchhaltung →</a>
   </div>
-  <div class="flex items-end gap-2 h-28">
+  <div class="flex items-end gap-1.5" style="height: 110px;">
     {% for m in revenue_months %}
-    {% set pct = ((m.total / max_rev * 100) | int) if max_rev > 0 else 0 %}
-    <div class="flex-1 flex flex-col items-center gap-1 group">
-      <span class="text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-        {{ '%.0f'|format(brutto(m.total)) }} €
+    {% set bar_px = ((m.total / max_rev * 80) | int) if max_rev > 0 else 0 %}
+    {% set is_current = loop.index == now_hour | default(7) %}
+    <div class="flex-1 flex flex-col items-center gap-1 group" style="height: 110px; justify-content: flex-end;">
+      <span class="text-xs text-gray-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" style="height:16px; line-height:16px;">
+        {{ '%.0f'|format(brutto(m.total)) if m.total > 0 else '' }} €
       </span>
-      <div class="w-full rounded-t-lg bg-gradient-to-t from-[#1c3461] to-[#2a6a8a] transition-all"
-           style="height: {{ [pct, 4] | max }}%; min-height: 4px; max-height: 100%;"></div>
-      <span class="text-xs text-gray-400">{{ m.label }}</span>
+      <div class="w-full rounded-t-md transition-all"
+           style="height: {{ [bar_px, 3] | max }}px; background: linear-gradient(to top, #1c3461, #2a6a8a);"></div>
+      <span class="text-xs text-gray-400" style="height:16px; line-height:16px;">{{ m.label }}</span>
     </div>
     {% endfor %}
   </div>
