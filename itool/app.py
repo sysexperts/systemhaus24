@@ -461,21 +461,23 @@ def dashboard():
     """).fetchall()
     revenue_months = db.execute("""
         SELECT TO_CHAR(i.date::date, 'YYYY-MM') as month,
-               TO_CHAR(i.date::date, 'Mon') as label,
                COALESCE(SUM(ii.quantity * ii.unit_price), 0) as total
         FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
         WHERE i.status IN ('sent','paid')
-          AND i.date::date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'
-        GROUP BY TO_CHAR(i.date::date, 'YYYY-MM'), TO_CHAR(i.date::date, 'Mon')
+          AND i.date::date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
+        GROUP BY TO_CHAR(i.date::date, 'YYYY-MM')
         ORDER BY month ASC
     """).fetchall()
-    from datetime import datetime, timedelta
-    # fill in missing months with 0
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+    # fill in all 12 months with correct labels
     all_months = []
-    for offset in range(5, -1, -1):
-        d = (datetime.now().replace(day=1) - timedelta(days=offset*28)).replace(day=1)
+    now = datetime.now().replace(day=1)
+    month_names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+    for offset in range(11, -1, -1):
+        d = now - relativedelta(months=offset)
         key = d.strftime('%Y-%m')
-        label = d.strftime('%b')
+        label = month_names[d.month - 1]
         found = next((r for r in revenue_months if r['month'] == key), None)
         all_months.append({'label': label, 'total': float(found['total']) if found else 0.0})
     db.close()
