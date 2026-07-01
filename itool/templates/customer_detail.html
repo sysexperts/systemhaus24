@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.company or customer.name }}{% endblock %}
+{% block content %}
+
+{% set c = customer %}
+
+<!-- Header -->
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <div class="flex items-center gap-3 mb-1">
+      <a href="{{ url_for('customers') }}" class="text-sm text-gray-400 hover:text-gray-600">← Kunden</a>
+    </div>
+    <h1 class="text-2xl font-bold text-gray-800">{{ c.company or c.name }}</h1>
+    {% if c.company %}<p class="text-sm text-gray-400 mt-0.5">{{ c.legal_form or '' }} · Ansprechpartner: {{ c.name }}</p>{% endif %}
+  </div>
+  <div class="flex items-center gap-2">
+    <!-- Status schnell ändern -->
+    <form method="POST" action="{{ url_for('customer_status', cid=c.id) }}" class="flex gap-1">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <select name="status" onchange="this.form.submit()"
+              class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none cursor-pointer">
+        <option value="lead"     {% if c.status=='lead'     %}selected{% endif %}>Lead</option>
+        <option value="customer" {% if c.status=='customer' %}selected{% endif %}>Kunde</option>
+        <option value="inactive" {% if c.status=='inactive' %}selected{% endif %}>Inaktiv</option>
+      </select>
+    </form>
+    <a href="{{ url_for('customer_edit', cid=c.id) }}"
+       class="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+      Bearbeiten
+    </a>
+    <a href="{{ url_for('invoice_new') }}?customer_id={{ c.id }}"
+       class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      + Rechnung
+    </a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='error' %}bg-red-50 text-red-700 border border-red-200{% else %}bg-green-50 text-green-700 border border-green-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- KPI Zeile -->
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Gesamtumsatz</p>
+    <p class="text-2xl font-bold text-gray-800">{{ '%.2f'|format(brutto(revenue_total)) }} €</p>
+    <p class="text-xs text-gray-400 mt-1">bezahlt + offen</p>
+  </div>
+  <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Rechnungen</p>
+    <p class="text-2xl font-bold text-gray-800">{{ invoices|length }}</p>
+    <p class="text-xs text-gray-400 mt-1">{{ invoices|selectattr('status','eq','paid')|list|length }} bezahlt</p>
+  </div>
+  <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Tickets</p>
+    <p class="text-2xl font-bold text-gray-800">{{ tickets|length }}</p>
+    <p class="text-xs text-gray-400 mt-1">{{ tickets|selectattr('status','ne','closed')|list|length }} offen</p>
+  </div>
+  <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Monatl. Pauschale</p>
+    <p class="text-2xl font-bold text-gray-800">{% if c.monthly_rate %}{{ '%.2f'|format(c.monthly_rate) }} €{% else %}–{% endif %}</p>
+    <p class="text-xs text-gray-400 mt-1">{{ c.contract_type or 'Kein Vertrag' }}</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- Linke Spalte: Stammdaten + Ansprechpartner -->
+  <div class="flex flex-col gap-5">
+
+    <!-- Stammdaten -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Stammdaten</p>
+      <div class="space-y-2.5 text-sm">
+        {% if c.customer_number %}
+        <div class="flex justify-between"><span class="text-gray-400">Kundennr.</span><span class="font-mono text-gray-700">{{ c.customer_number }}</span></div>
+        {% endif %}
+        {% if c.email %}
+        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">E-Mail</span><a href="mailto:{{ c.email }}" class="text-[#1c3461] hover:underline truncate">{{ c.email }}</a></div>
+        {% endif %}
+        {% if c.phone %}
+        <div class="flex justify-between"><span class="text-gray-400">Telefon</span><a href="tel:{{ c.phone }}" class="text-gray-700 hover:underline">{{ c.phone }}</a></div>
+        {% endif %}
+        {% if c.website %}
+        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">Website</span><a href="{{ c.website }}" target="_blank" class="text-[#1c3461] hover:underline truncate">{{ c.website }}</a></div>
+        {% endif %}
+        {% if c.street or c.city %}
+        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">Adresse</span><span class="text-gray-700 text-right">{{ c.street or '' }}<br>{{ c.zip or '' }} {{ c.city or '' }}</span></div>
+        {% endif %}
+        {% if c.tax_id %}
+        <div class="flex justify-between"><span class="text-gray-400">USt-IdNr.</span><span class="text-gray-700 font-mono">{{ c.tax_id }}</span></div>
+        {% endif %}
+        {% if c.payment_terms %}
+        <div class="flex justify-between"><span class="text-gray-400">Zahlung</span><span class="text-gray-700">{{ c.payment_terms }}</span></div>
+        {% endif %}
+        {% if c.source %}
+        <div class="flex justify-between"><span class="text-gray-400">Herkunft</span><span class="text-gray-700">{{ c.source }}</span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- IT-Infrastruktur -->
+    {% if c.num_workstations or c.num_servers or c.it_notes or c.support_level %}
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">IT-Infrastruktur</p>
+      <div class="space-y-2.5 text-sm">
+        {% if c.num_workstations %}<div class="flex justify-between"><span class="text-gray-400">Arbeitsplätze</span><span class="text-gray-700">{{ c.num_workstations }}</span></div>{% endif %}
+        {% if c.num_servers %}<div class="flex justify-between"><span class="text-gray-400">Server</span><span class="text-gray-700">{{ c.num_servers }}</span></div>{% endif %}
+        {% if c.support_level %}<div class="flex justify-between"><span class="text-gray-400">Support</span><span class="text-gray-700">{{ c.support_level }}</span></div>{% endif %}
+        {% if c.contract_start %}<div class="flex justify-between"><span class="text-gray-400">Vertrag ab</span><span class="text-gray-700">{{ c.contract_start }}</span></div>{% endif %}
+        {% if c.contract_end %}<div class="flex justify-between"><span class="text-gray-400">Vertrag bis</span><span class="text-gray-700">{{ c.contract_end }}</span></div>{% endif %}
+        {% if c.it_notes %}<p class="text-xs text-gray-500 mt-3 leading-relaxed">{{ c.it_notes }}</p>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Notizen -->
+    {% if c.notes %}
+    <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+      <p class="text-xs text-amber-600 uppercase tracking-wide font-semibold mb-2">Interne Notizen</p>
+      <p class="text-sm text-gray-700 leading-relaxed">{{ c.notes }}</p>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Rechte 2 Spalten: Tickets + Rechnungen + Ansprechpartner -->
+  <div class="xl:col-span-2 flex flex-col gap-5">
+
+    <!-- Ansprechpartner -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+          <h2 class="text-sm font-semibold text-gray-700">Ansprechpartner</h2>
+        </div>
+        <button onclick="document.getElementById('add-contact-form').classList.toggle('hidden')"
+                class="text-xs text-blue-500 hover:underline">+ Hinzufügen</button>
+      </div>
+
+      <!-- Primärer Ansprechpartner (aus Kundendaten) -->
+      {% if c.contact_person %}
+      <div class="flex items-center gap-4 px-5 py-3 border-b border-gray-50 bg-blue-50/30">
+        <div class="w-8 h-8 rounded-full bg-[#1c3461]/10 flex items-center justify-center shrink-0">
+          <span class="text-xs font-bold text-[#1c3461]">{{ c.contact_person[0].upper() }}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-700">{{ c.contact_person }} <span class="text-xs text-blue-500 font-normal ml-1">Primär</span></p>
+          {% if c.contact_position %}<p class="text-xs text-gray-400">{{ c.contact_position }}</p>{% endif %}
+        </div>
+        <div class="text-right text-xs text-gray-400 shrink-0">
+          {% if c.contact_email %}<a href="mailto:{{ c.contact_email }}" class="block hover:text-[#1c3461]">{{ c.contact_email }}</a>{% endif %}
+          {% if c.contact_phone %}<span>{{ c.contact_phone }}</span>{% endif %}
+          {% if c.contact_mobile %}<span class="block">{{ c.contact_mobile }}</span>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Weitere Ansprechpartner -->
+      {% for ct in contacts %}
+      <div class="flex items-center gap-4 px-5 py-3 border-b border-gray-50 group">
+        <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+          <span class="text-xs font-bold text-gray-500">{{ ct.name[0].upper() }}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-700">{{ ct.name }}</p>
+          {% if ct.position %}<p class="text-xs text-gray-400">{{ ct.position }}</p>{% endif %}
+          {% if ct.notes %}<p class="text-xs text-gray-400 italic">{{ ct.notes }}</p>{% endif %}
+        </div>
+        <div class="text-right text-xs text-gray-400 shrink-0">
+          {% if ct.email %}<a href="mailto:{{ ct.email }}" class="block hover:text-[#1c3461]">{{ ct.email }}</a>{% endif %}
+          {% if ct.phone %}<span>{{ ct.phone }}</span>{% endif %}
+          {% if ct.mobile %}<span class="block">{{ ct.mobile }}</span>{% endif %}
+        </div>
+        <form method="POST" action="{{ url_for('customer_contact_delete', cid=c.id, ctid=ct.id) }}"
+              onsubmit="return confirm('Ansprechpartner löschen?')" class="opacity-0 group-hover:opacity-100 transition-opacity">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="text-red-300 hover:text-red-500 text-xs">✕</button>
+        </form>
+      </div>
+      {% endfor %}
+
+      {% if not c.contact_person and not contacts %}
+      <div class="px-5 py-6 text-center text-gray-300 text-sm">Keine Ansprechpartner hinterlegt</div>
+      {% endif %}
+
+      <!-- Formular neuer Ansprechpartner -->
+      <div id="add-contact-form" class="hidden border-t border-gray-100 p-5 bg-gray-50">
+        <form method="POST" action="{{ url_for('customer_contact_add', cid=c.id) }}" class="grid grid-cols-2 gap-3">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input name="name" required placeholder="Name *"
+                 class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <input name="position" placeholder="Position"
+                 class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <input name="email" type="email" placeholder="E-Mail"
+                 class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <input name="phone" placeholder="Telefon"
+                 class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <input name="mobile" placeholder="Mobil"
+                 class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <input name="notes" placeholder="Notiz"
+                 class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <div class="col-span-2 flex gap-2">
+            <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+            <button type="button" onclick="document.getElementById('add-contact-form').classList.add('hidden')"
+                    class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-200 transition-colors">Abbrechen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tickets -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-orange-400"></div>
+          <h2 class="text-sm font-semibold text-gray-700">Tickets</h2>
+        </div>
+        <a href="{{ url_for('ticket_new') }}?customer_id={{ c.id }}" class="text-xs text-blue-500 hover:underline">+ Neu</a>
+      </div>
+      {% if tickets %}
+      <div class="divide-y divide-gray-50">
+        {% for t in tickets %}
+        <a href="{{ url_for('ticket_edit', tid=t.id) }}"
+           class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/70 transition-colors group">
+          <div class="w-2 h-2 rounded-full shrink-0
+            {% if t.priority=='high' %}bg-red-500
+            {% elif t.priority=='medium' %}bg-yellow-400
+            {% else %}bg-gray-300{% endif %}"></div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-700 group-hover:text-[#1c3461] truncate">{{ t.title }}</p>
+            <p class="text-xs text-gray-400">{{ t.created_at[:10] if t.created_at else '' }}</p>
+          </div>
+          <span class="shrink-0 text-xs px-2.5 py-1 rounded-full font-medium
+            {% if t.status=='open' %}bg-blue-50 text-blue-600
+            {% elif t.status=='in_progress' %}bg-amber-50 text-amber-600
+            {% else %}bg-green-50 text-green-600{% endif %}">
+            {{ {'open':'Offen','in_progress':'In Arbeit','closed':'Gelöst'}.get(t.status, t.status) }}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="py-8 text-center text-gray-300 text-sm">Keine Tickets</div>
+      {% endif %}
+    </div>
+
+    <!-- Rechnungen -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+          <h2 class="text-sm font-semibold text-gray-700">Rechnungen</h2>
+        </div>
+        <a href="{{ url_for('invoice_new') }}" class="text-xs text-blue-500 hover:underline">+ Neu</a>
+      </div>
+      {% if invoices %}
+      <div class="divide-y divide-gray-50">
+        {% for inv in invoices %}
+        <a href="{{ url_for('invoice_view', iid=inv.id) }}"
+           class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/70 transition-colors group">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-gray-500">{{ inv.number }}</p>
+            <p class="text-xs text-gray-400">{{ inv.date }}{% if inv.due_date and inv.due_date != '' %} · fällig {{ inv.due_date }}{% endif %}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-sm font-semibold text-gray-700">{{ '%.2f'|format(brutto(inv.total)) }} €</p>
+            <span class="text-xs px-2 py-0.5 rounded-full
+              {% if inv.status=='paid' %}bg-green-50 text-green-600
+              {% elif inv.status=='sent' %}bg-blue-50 text-blue-600
+              {% else %}bg-gray-100 text-gray-400{% endif %}">
+              {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt'}.get(inv.status, inv.status) }}
+            </span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="py-8 text-center text-gray-300 text-sm">Keine Rechnungen</div>
+      {% endif %}
+    </div>
+
+    <!-- Löschen -->
+    <div class="bg-white rounded-2xl shadow-sm border border-red-100 p-5">
+      <p class="text-xs text-red-400 uppercase tracking-wide font-semibold mb-3">Gefahrenzone</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-700">Kunden löschen</p>
+          <p class="text-xs text-gray-400 mt-0.5">Nicht möglich wenn bezahlte oder gesendete Rechnungen existieren.</p>
+        </div>
+        <form method="POST" action="{{ url_for('customer_delete', cid=c.id) }}"
+              onsubmit="return confirm('Kunden wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors">
+            Löschen
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

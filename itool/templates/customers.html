@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Kunden – tkToolkit{% endblock %}
+{% block title %}Kunden{% endblock %}
 {% block content %}
 
 <div class="flex items-center justify-between mb-5">
@@ -30,9 +30,11 @@
   <table class="w-full text-sm">
     <thead>
       <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Nr.</th>
         <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Name / Firma</th>
         <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">E-Mail</th>
         <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Telefon</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Vertragsart</th>
         <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
         <th class="px-5 py-3"></th>
       </tr>
@@ -40,32 +42,41 @@
     <tbody>
     {% for c in customers %}
     <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+      <td class="px-5 py-3 text-xs text-gray-400 font-mono">{{ c.customer_number or '–' }}</td>
       <td class="px-5 py-3">
-        <div class="font-medium text-gray-800">{{ c.name }}</div>
+        <a href="{{ url_for('customer_detail', cid=c.id) }}" class="font-medium text-gray-800 hover:text-[#1c3461] hover:underline">{{ c.name }}</a>
         {% if c.company %}<div class="text-xs text-gray-400">{{ c.company }}</div>{% endif %}
       </td>
       <td class="px-5 py-3 text-gray-500">{{ c.email or '–' }}</td>
       <td class="px-5 py-3 text-gray-500">{{ c.phone or '–' }}</td>
+      <td class="px-5 py-3 text-xs text-gray-500">{{ c.contract_type or '–' }}</td>
       <td class="px-5 py-3">
         <span class="px-2.5 py-1 rounded-full text-xs font-medium
           {% if c.status=='customer' %}bg-green-100 text-green-700
           {% elif c.status=='lead'   %}bg-yellow-100 text-yellow-700
           {% else %}bg-gray-100 text-gray-500{% endif %}">
-          {{ {'lead':'Lead','customer':'Kunde','inactive':'Inaktiv'}[c.status] }}
+          {{ {'lead':'Lead','customer':'Kunde','inactive':'Inaktiv'}.get(c.status, c.status) }}
         </span>
       </td>
       <td class="px-5 py-3 text-right">
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-2">
+          {% if c.status == 'lead' %}
+          <form method="POST" action="{{ url_for('customer_status', cid=c.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="customer">
+            <button class="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors font-medium whitespace-nowrap">→ Kunde</button>
+          </form>
+          {% endif %}
           <a href="{{ url_for('customer_edit', cid=c.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</a>
           <form method="POST" action="{{ url_for('customer_delete', cid=c.id) }}" onsubmit="return confirm('Wirklich löschen?')">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
           </form>
         </div>
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="px-5 py-12 text-center text-gray-400">Keine Kunden gefunden.</td></tr>
+    <tr><td colspan="7" class="px-5 py-12 text-center text-gray-400">Keine Kunden gefunden.</td></tr>
     {% endfor %}
     </tbody>
   </table>

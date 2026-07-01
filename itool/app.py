@@ -575,18 +575,97 @@ def customer_edit(cid):
     return render_template("customer_form.html", customer=customer, kd_nr=None)
 
 
+@app.route("/customers/<int:cid>")
+@login_required
+def customer_detail(cid):
+    db = get_db()
+    customer = db.execute("SELECT * FROM customers WHERE id=%s", (cid,)).fetchone()
+    if not customer:
+        db.close()
+        flash("Kunde nicht gefunden", "error")
+        return redirect(url_for("customers"))
+    tickets = db.execute("""
+        SELECT * FROM tickets WHERE customer_id=%s ORDER BY
+        CASE status WHEN 'open' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END,
+        CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        created_at DESC
+    """, (cid,)).fetchall()
+    invoices = db.execute("""
+        SELECT i.*, COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as total
+        FROM invoices i WHERE i.customer_id=%s ORDER BY i.date DESC
+    """, (cid,)).fetchall()
+    revenue_total = db.execute("""
+        SELECT COALESCE(SUM(ii.quantity*ii.unit_price),0)
+        FROM invoices i JOIN invoice_items ii ON ii.invoice_id=i.id
+        WHERE i.customer_id=%s AND i.status IN ('sent','paid')
+    """, (cid,)).fetchone()[0]
+    contacts = db.execute(
+        "SELECT * FROM customer_contacts WHERE customer_id=%s ORDER BY created_at ASC", (cid,)
+    ).fetchall()
+    db.close()
+    return render_template("customer_detail.html", customer=customer,
+                           tickets=tickets, invoices=invoices,
+                           revenue_total=revenue_total, contacts=contacts)
+
+
+@app.route("/customers/<int:cid>/status", methods=["POST"])
+@login_required
+def customer_status(cid):
+    new_status = request.form.get("status")
+    if new_status not in ("lead", "customer", "inactive"):
+        flash("Ungültiger Status", "error")
+        return redirect(url_for("customers"))
+    db = get_db()
+    db.execute("UPDATE customers SET status=%s WHERE id=%s", (new_status, cid))
+    db.commit()
+    db.close()
+    return redirect(request.referrer or url_for("customers"))
+
+
+@app.route("/customers/<int:cid>/contacts/add", methods=["POST"])
+@login_required
+def customer_contact_add(cid):
+    db = get_db()
+    db.execute("""INSERT INTO customer_contacts (customer_id, name, position, email, phone, mobile, notes)
+                  VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+               (cid, request.form.get("name"), request.form.get("position"),
+                request.form.get("email"), request.form.get("phone"),
+                request.form.get("mobile"), request.form.get("notes")))
+    db.commit()
+    db.close()
+    flash("Ansprechpartner hinzugefügt", "success")
+    return redirect(url_for("customer_detail", cid=cid))
+
+
+@app.route("/customers/<int:cid>/contacts/<int:ctid>/delete", methods=["POST"])
+@login_required
+def customer_contact_delete(cid, ctid):
+    db = get_db()
+    db.execute("DELETE FROM customer_contacts WHERE id=%s AND customer_id=%s", (ctid, cid))
+    db.commit()
+    db.close()
+    return redirect(url_for("customer_detail", cid=cid))
+
+
 @app.route("/customers/<int:cid>/delete", methods=["POST"])
 @login_required
 def customer_delete(cid):
     db = get_db()
-    # invoice_items cascade automatically when invoice is deleted
-    inv_ids = [r[0] for r in db.execute(
-        "SELECT id FROM invoices WHERE customer_id=%s", (cid,)).fetchall()]
-    for iid in inv_ids:
+    inv_count = db.execute(
+        "SELECT COUNT(*) FROM invoices WHERE customer_id=%s AND status IN ('sent','paid')", (cid,)
+    ).fetchone()[0]
+    if inv_count > 0:
+        db.close()
+        flash(f"Kunde kann nicht gelöscht werden – es existieren {inv_count} gesendete/bezahlte Rechnung(en). Setze den Kunden stattdessen auf 'Inaktiv'.", "error")
+        return redirect(url_for("customer_detail", cid=cid))
+    # delete only draft invoices
+    draft_ids = [r[0] for r in db.execute(
+        "SELECT id FROM invoices WHERE customer_id=%s AND status='draft'", (cid,)).fetchall()]
+    for iid in draft_ids:
         db.execute("DELETE FROM invoice_items WHERE invoice_id=%s", (iid,))
-    if inv_ids:
-        db.execute(f"DELETE FROM invoices WHERE id IN ({','.join('%s'*len(inv_ids))})", inv_ids)
-    db.execute("UPDATE tickets  SET customer_id=NULL WHERE customer_id=%s", (cid,))
+    if draft_ids:
+        db.execute("DELETE FROM invoices WHERE id=ANY(%s)", (draft_ids,))
+    db.execute("UPDATE tickets SET customer_id=NULL WHERE customer_id=%s", (cid,))
     db.execute("DELETE FROM outreach WHERE customer_id=%s", (cid,))
     db.execute("DELETE FROM customers WHERE id=%s", (cid,))
     db.commit()

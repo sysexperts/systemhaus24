@@ -323,6 +323,17 @@ def init_db():
             payout_id INTEGER REFERENCES promoter_payouts(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS customer_contacts (
+            id SERIAL PRIMARY KEY,
+            customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            position TEXT,
+            email TEXT,
+            phone TEXT,
+            mobile TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     for sql in stmts:
