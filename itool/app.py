@@ -459,32 +459,24 @@ def dashboard():
         WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date::date < CURRENT_DATE
         ORDER BY i.due_date ASC
     """).fetchall()
-    revenue_months = db.execute("""
-        SELECT TO_CHAR(i.date::date, 'YYYY-MM') as month,
+    from datetime import datetime
+    current_year = datetime.now().year
+    revenue_rows = db.execute("""
+        SELECT EXTRACT(MONTH FROM i.date::date) as mon,
                COALESCE(SUM(ii.quantity * ii.unit_price), 0) as total
         FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
         WHERE i.status IN ('sent','paid')
-          AND i.date::date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
-        GROUP BY TO_CHAR(i.date::date, 'YYYY-MM')
-        ORDER BY month ASC
-    """).fetchall()
-    from datetime import datetime
-    from dateutil.relativedelta import relativedelta
-    # fill in all 12 months with correct labels
-    all_months = []
-    now = datetime.now().replace(day=1)
+          AND EXTRACT(YEAR FROM i.date::date) = %s
+        GROUP BY 1 ORDER BY 1
+    """, (current_year,)).fetchall()
     month_names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
-    for offset in range(11, -1, -1):
-        d = now - relativedelta(months=offset)
-        key = d.strftime('%Y-%m')
-        label = month_names[d.month - 1]
-        found = next((r for r in revenue_months if r['month'] == key), None)
-        all_months.append({'label': label, 'total': float(found['total']) if found else 0.0})
+    rev_by_month = {int(r['mon']): float(r['total']) for r in revenue_rows}
+    all_months = [{'label': month_names[m-1], 'total': rev_by_month.get(m, 0.0)} for m in range(1, 13)]
     db.close()
     return render_template("dashboard.html", stats=stats,
                            recent_tickets=recent_tickets, recent_invoices=recent_invoices,
                            overdue_invoices=overdue_invoices, revenue_months=all_months,
-                           now_hour=datetime.now().hour)
+                           current_year=current_year, now_hour=datetime.now().hour)
 
 
 # ── Kunden ────────────────────────────────────────────────────────────────────
