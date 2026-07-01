@@ -137,7 +137,7 @@
         <div class="flex items-center gap-3 px-5 py-3">
           <div class="flex-1">
             <p class="text-sm font-semibold text-gray-700">{{ '%.2f'|format(p.amount) }} €</p>
-            <p class="text-xs text-gray-400">{{ p.requested_at[:10] }}</p>
+            <p class="text-xs text-gray-400">{{ p.requested_at.strftime('%Y-%m-%d') if p.requested_at else '–' }}</p>
             {% if p.admin_notes %}<p class="text-xs text-gray-400 italic mt-0.5">{{ p.admin_notes }}</p>{% endif %}
           </div>
           <span class="text-xs px-2.5 py-1 rounded-full font-medium shrink-0

@@ -37,7 +37,7 @@
     <div class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm">
       <div class="flex-1">
         <p class="text-sm font-semibold text-gray-800">{{ p.display_name or p.username }}</p>
-        <p class="text-xs text-gray-400">Beantragt: {{ p.requested_at[:10] }}</p>
+        <p class="text-xs text-gray-400">Beantragt: {{ p.requested_at.strftime('%Y-%m-%d') if p.requested_at else '–' }}</p>
       </div>
       <p class="text-lg font-bold text-gray-800">{{ '%.2f'|format(p.amount) }} €</p>
       <form method="POST" action="{{ url_for('promoter_payout_decide', poid=p.id) }}" class="flex gap-2 items-end">

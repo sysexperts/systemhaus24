@@ -1253,10 +1253,15 @@ def documents(folder_id=None):
             return redirect(url_for("documents"))
     else:
         folder = None
-    items = db.execute(
-        "SELECT * FROM documents WHERE parent_id IS %s ORDER BY type DESC, name ASC",
-        (folder_id,)
-    ).fetchall()
+    if folder_id:
+        items = db.execute(
+            "SELECT * FROM documents WHERE parent_id = %s ORDER BY type DESC, name ASC",
+            (folder_id,)
+        ).fetchall()
+    else:
+        items = db.execute(
+            "SELECT * FROM documents WHERE parent_id IS NULL ORDER BY type DESC, name ASC"
+        ).fetchall()
     crumbs = _doc_breadcrumb(db, folder_id) if folder_id else []
     db.close()
     return render_template("documents.html", items=items, folder=folder, folder_id=folder_id, crumbs=crumbs)
@@ -2222,7 +2227,7 @@ def accounting():
     unpaid = db.execute("""
         SELECT i.*, c.name as customer_name, c.company as customer_company,
                COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as total,
-               CAST(julianday('now') - julianday(i.due_date) AS INTEGER) as overdue_days
+               CASE WHEN i.due_date IS NOT NULL AND i.due_date != '' THEN (CURRENT_DATE - i.due_date::date) ELSE NULL END as overdue_days
         FROM invoices i LEFT JOIN customers c ON c.id=i.customer_id
         WHERE i.status='sent'
         ORDER BY i.due_date ASC

@@ -61,7 +61,7 @@
       <div class="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
         <div class="flex justify-between items-start mb-1">
           <span class="font-medium text-sm text-gray-800">{{ h.customer_name }}</span>
-          <span class="text-xs text-gray-400 shrink-0 ml-2">{{ h.sent_at[:10] }}</span>
+          <span class="text-xs text-gray-400 shrink-0 ml-2">{{ h.sent_at.strftime('%Y-%m-%d') if h.sent_at else '–' }}</span>
         </div>
         <div class="text-xs text-[#1c3461] font-medium mb-1">{{ h.subject }}</div>
         <div class="text-xs text-gray-500 line-clamp-2 leading-relaxed">{{ h.body }}</div>

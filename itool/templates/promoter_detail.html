@@ -125,8 +125,8 @@
         <div class="flex items-center gap-3 px-5 py-3">
           <div class="flex-1">
             <p class="text-sm font-medium text-gray-700">{{ '%.2f'|format(p.amount) }} €</p>
-            <p class="text-xs text-gray-400">{{ p.requested_at[:10] }}
-              {% if p.decided_at %} → entschieden {{ p.decided_at[:10] }}{% endif %}
+            <p class="text-xs text-gray-400">{{ p.requested_at.strftime('%Y-%m-%d') if p.requested_at else '–' }}
+              {% if p.decided_at %} → entschieden {{ p.decided_at.strftime('%Y-%m-%d') if p.decided_at else '–' }}{% endif %}
             </p>
             {% if p.admin_notes %}<p class="text-xs text-gray-400 italic">{{ p.admin_notes }}</p>{% endif %}
           </div>
