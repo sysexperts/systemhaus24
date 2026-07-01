@@ -461,7 +461,7 @@ def dashboard():
                COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as total,
                (CURRENT_DATE - i.due_date::date) as overdue_days
         FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id
-        WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date::date < CURRENT_DATE
+        WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date != '' AND i.due_date::date < CURRENT_DATE
         ORDER BY i.due_date ASC
     """).fetchall()
     from datetime import datetime
