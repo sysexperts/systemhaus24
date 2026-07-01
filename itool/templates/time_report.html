@@ -148,7 +148,7 @@
     <tbody class="divide-y divide-gray-50">
       {% for r in rows %}
       <tr class="hover:bg-gray-50/50 transition-colors">
-        <td class="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{{ r.created_at[:10] }}</td>
+        <td class="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '–' }}</td>
         <td class="px-5 py-3">
           <a href="{{ url_for('ticket_detail', tid=r.ticket_id) }}"
              class="text-sm font-medium text-gray-700 hover:text-[#1c3461] truncate block max-w-xs">{{ r.ticket_title }}</a>

@@ -20,7 +20,7 @@
         {{ stage_map[lead.stage].label if lead.stage in stage_map else lead.stage }}
       </span>
     </div>
-    <p class="text-xs text-gray-400 mt-0.5">Erfasst am {{ lead.created_at[:10] }} · Quelle: {{ lead.source }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">Erfasst am {{ lead.created_at.strftime('%Y-%m-%d') if lead.created_at else '–' }} · Quelle: {{ lead.source }}</p>
   </div>
   <form method="POST" action="{{ url_for('akquise_delete', lid=lead.id) }}"
         onsubmit="return confirm('Lead wirklich löschen?')">

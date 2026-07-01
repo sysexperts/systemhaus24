@@ -231,7 +231,7 @@
             {% else %}bg-gray-300{% endif %}"></div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium text-gray-700 group-hover:text-[#1c3461] truncate">{{ t.title }}</p>
-            <p class="text-xs text-gray-400">{{ t.created_at[:10] if t.created_at else '' }}</p>
+            <p class="text-xs text-gray-400">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '' }}</p>
           </div>
           <span class="shrink-0 text-xs px-2.5 py-1 rounded-full font-medium
             {% if t.status=='open' %}bg-blue-50 text-blue-600

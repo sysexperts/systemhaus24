@@ -115,7 +115,7 @@
       <!-- Uploader -->
       <td class="px-4 py-3 text-gray-400 text-xs">{{ item.uploaded_by or '–' }}</td>
       <!-- Date -->
-      <td class="px-4 py-3 text-gray-400 text-xs">{{ item.created_at[:10] }}</td>
+      <td class="px-4 py-3 text-gray-400 text-xs">{{ item.created_at.strftime('%Y-%m-%d') if item.created_at else '–' }}</td>
       <!-- Actions -->
       <td class="px-4 py-3">
         <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

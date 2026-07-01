@@ -64,7 +64,7 @@
           {{ {'open':'Offen','in_progress':'In Arbeit','closed':'Gelöst'}[t.status] }}
         </span>
       </td>
-      <td class="px-5 py-3 text-gray-400 text-xs">{{ t.created_at[:10] }}</td>
+      <td class="px-5 py-3 text-gray-400 text-xs">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '–' }}</td>
       <td class="px-5 py-3 text-right">
         <div class="flex items-center justify-end gap-3">
           <a href="{{ url_for('ticket_edit', tid=t.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</a>
