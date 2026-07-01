@@ -223,7 +223,7 @@
           <div class="w-2 h-2 rounded-full bg-purple-400"></div>
           <h2 class="text-sm font-semibold text-gray-700">Bald fällige Abos</h2>
         </div>
-        <a href="{{ url_for('recurring_invoices') }}" class="text-xs text-blue-500 hover:underline">Alle →</a>
+        <a href="{{ url_for('recurring_list') }}" class="text-xs text-blue-500 hover:underline">Alle →</a>
       </div>
       <div class="divide-y divide-gray-50">
         {% for r in upcoming_recurring %}
