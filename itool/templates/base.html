@@ -35,10 +35,10 @@
   <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20" style="background: linear-gradient(160deg, #2e5090 0%, #1c3461 60%, #162a50 100%)">
 
     <!-- Logo (immer zentriert, immer sichtbar) -->
-    <div class="flex items-center justify-center px-2 mb-2" style="min-height:44px">
+    <div class="flex items-center justify-center px-2 mb-2" style="min-height:64px">
       {% if app_cfg.get('company_logo_ext') %}
       <img src="{{ url_for('company_logo') }}" alt="Logo"
-           class="max-h-9 object-contain opacity-90" style="max-width:180px">
+           class="max-h-14 object-contain opacity-90" style="max-width:200px">
       {% endif %}
     </div>
     <div class="mx-3 mb-2 border-t border-white/10"></div>
