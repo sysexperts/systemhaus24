@@ -17,6 +17,8 @@
     white-space: nowrap;
   }
   #sidebar.expanded { width: 220px; }
+  #sidebar .sidebar-logo { max-height: 40px; max-width: 56px; transition: max-height 0.15s, max-width 0.15s; }
+  #sidebar.expanded .sidebar-logo { max-height: 64px; max-width: 200px; }
   #sidebar .lbl { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
   #sidebar.expanded .lbl { opacity: 1; pointer-events: auto; }
   #sidebar .submenu { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; }
@@ -35,10 +37,9 @@
   <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20" style="background: linear-gradient(160deg, #2e5090 0%, #1c3461 60%, #162a50 100%)">
 
     <!-- Logo (immer zentriert, immer sichtbar) -->
-    <div class="flex items-center justify-center px-2 mb-2" style="min-height:64px">
+    <div class="flex items-center justify-center px-1 mb-2" style="min-height:64px">
       {% if app_cfg.get('company_logo_ext') %}
-      <img src="{{ url_for('company_logo') }}" alt="Logo"
-           class="max-h-14 object-contain opacity-90" style="max-width:200px">
+      <img src="{{ url_for('company_logo') }}" alt="Logo" class="sidebar-logo object-contain opacity-90">
       {% endif %}
     </div>
     <div class="mx-3 mb-2 border-t border-white/10"></div>
@@ -205,11 +206,11 @@
           <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover">
           {% else %}
           <div class="w-full h-full bg-[#2a4a8a] flex items-center justify-center">
-            <span class="text-white text-xs font-bold">{{ session.username[0].upper() }}</span>
+            <span class="text-white text-xs font-bold">{{ (session.display_name or session.username)[0].upper() }}</span>
           </div>
           {% endif %}
         </div>
-        <span class="lbl text-xs text-white/60 font-medium">{{ session.username }}</span>
+        <span class="lbl text-xs text-white/60 font-medium">{{ session.display_name or session.username }}</span>
       </a>
       <a href="{{ url_for('logout') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors" title="Logout">
         <svg class="w-5 h-5 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
