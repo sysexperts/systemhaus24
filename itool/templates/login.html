@@ -21,7 +21,7 @@
 <body class="flex h-screen overflow-hidden">
 
   <!-- Left blue panel -->
-  <div class="w-72 shrink-0 bg-gradient-to-b from-[#1c3461] to-[#2a4a8a] flex flex-col justify-between p-8 shadow-2xl">
+  <div class="w-72 shrink-0 bg-gradient-to-b from-[#07B0AA] to-[#059a94] flex flex-col justify-between p-8 shadow-2xl">
     <div class="flex flex-col items-center text-center">
       {% if app_cfg.get('company_logo_ext') %}
       <img src="{{ url_for('company_logo') }}" alt="Logo" class="max-h-20 max-w-full object-contain mb-5">
@@ -57,7 +57,7 @@
     <div class="flex flex-col items-center mb-6">
       <div id="user-avatar"
            class="w-20 h-20 rounded-full bg-white shadow-lg flex items-center justify-center mb-3 border-4 border-white overflow-hidden">
-        <svg id="avatar-fallback" class="w-10 h-10 text-[#1c3461]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg id="avatar-fallback" class="w-10 h-10 text-[#07B0AA]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
         </svg>
         <img id="avatar-img" src="" alt="" class="w-full h-full object-cover hidden">
@@ -83,7 +83,7 @@
                class="w-full bg-transparent py-2 text-gray-700 placeholder-gray-400 text-sm focus:outline-none">
       </div>
       <button type="submit"
-              class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#2a4a8a] transition-colors mt-2">
+              class="w-full bg-[#07B0AA] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#059a94] transition-colors mt-2">
         Anmelden
       </button>
     </form>

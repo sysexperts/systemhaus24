@@ -29,7 +29,7 @@
       Bearbeiten
     </a>
     <a href="{{ url_for('invoice_new') }}?customer_id={{ c.id }}"
-       class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+       class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
       + Rechnung
     </a>
   </div>
@@ -78,13 +78,13 @@
         <div class="flex justify-between"><span class="text-gray-400">Kundennr.</span><span class="font-mono text-gray-700">{{ c.customer_number }}</span></div>
         {% endif %}
         {% if c.email %}
-        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">E-Mail</span><a href="mailto:{{ c.email }}" class="text-[#1c3461] hover:underline truncate">{{ c.email }}</a></div>
+        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">E-Mail</span><a href="mailto:{{ c.email }}" class="text-[#07B0AA] hover:underline truncate">{{ c.email }}</a></div>
         {% endif %}
         {% if c.phone %}
         <div class="flex justify-between"><span class="text-gray-400">Telefon</span><a href="tel:{{ c.phone }}" class="text-gray-700 hover:underline">{{ c.phone }}</a></div>
         {% endif %}
         {% if c.website %}
-        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">Website</span><a href="{{ c.website }}" target="_blank" class="text-[#1c3461] hover:underline truncate">{{ c.website }}</a></div>
+        <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">Website</span><a href="{{ c.website }}" target="_blank" class="text-[#07B0AA] hover:underline truncate">{{ c.website }}</a></div>
         {% endif %}
         {% if c.street or c.city %}
         <div class="flex justify-between gap-2"><span class="text-gray-400 shrink-0">Adresse</span><span class="text-gray-700 text-right">{{ c.street or '' }}<br>{{ c.zip or '' }} {{ c.city or '' }}</span></div>
@@ -143,15 +143,15 @@
       <!-- Primärer Ansprechpartner (aus Kundendaten) -->
       {% if c.contact_person %}
       <div class="flex items-center gap-4 px-5 py-3 border-b border-gray-50 bg-blue-50/30">
-        <div class="w-8 h-8 rounded-full bg-[#1c3461]/10 flex items-center justify-center shrink-0">
-          <span class="text-xs font-bold text-[#1c3461]">{{ c.contact_person[0].upper() }}</span>
+        <div class="w-8 h-8 rounded-full bg-[#07B0AA]/10 flex items-center justify-center shrink-0">
+          <span class="text-xs font-bold text-[#07B0AA]">{{ c.contact_person[0].upper() }}</span>
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-gray-700">{{ c.contact_person }} <span class="text-xs text-blue-500 font-normal ml-1">Primär</span></p>
           {% if c.contact_position %}<p class="text-xs text-gray-400">{{ c.contact_position }}</p>{% endif %}
         </div>
         <div class="text-right text-xs text-gray-400 shrink-0">
-          {% if c.contact_email %}<a href="mailto:{{ c.contact_email }}" class="block hover:text-[#1c3461]">{{ c.contact_email }}</a>{% endif %}
+          {% if c.contact_email %}<a href="mailto:{{ c.contact_email }}" class="block hover:text-[#07B0AA]">{{ c.contact_email }}</a>{% endif %}
           {% if c.contact_phone %}<span>{{ c.contact_phone }}</span>{% endif %}
           {% if c.contact_mobile %}<span class="block">{{ c.contact_mobile }}</span>{% endif %}
         </div>
@@ -170,7 +170,7 @@
           {% if ct.notes %}<p class="text-xs text-gray-400 italic">{{ ct.notes }}</p>{% endif %}
         </div>
         <div class="text-right text-xs text-gray-400 shrink-0">
-          {% if ct.email %}<a href="mailto:{{ ct.email }}" class="block hover:text-[#1c3461]">{{ ct.email }}</a>{% endif %}
+          {% if ct.email %}<a href="mailto:{{ ct.email }}" class="block hover:text-[#07B0AA]">{{ ct.email }}</a>{% endif %}
           {% if ct.phone %}<span>{{ ct.phone }}</span>{% endif %}
           {% if ct.mobile %}<span class="block">{{ ct.mobile }}</span>{% endif %}
         </div>
@@ -203,7 +203,7 @@
           <input name="notes" placeholder="Notiz"
                  class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
           <div class="col-span-2 flex gap-2">
-            <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+            <button type="submit" class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">Speichern</button>
             <button type="button" onclick="document.getElementById('add-contact-form').classList.add('hidden')"
                     class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-200 transition-colors">Abbrechen</button>
           </div>
@@ -230,7 +230,7 @@
             {% elif t.priority=='medium' %}bg-yellow-400
             {% else %}bg-gray-300{% endif %}"></div>
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-gray-700 group-hover:text-[#1c3461] truncate">{{ t.title }}</p>
+            <p class="text-sm font-medium text-gray-700 group-hover:text-[#07B0AA] truncate">{{ t.title }}</p>
             <p class="text-xs text-gray-400">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '' }}</p>
           </div>
           <span class="shrink-0 text-xs px-2.5 py-1 rounded-full font-medium

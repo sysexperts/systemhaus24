@@ -40,7 +40,7 @@
 {% if session.user_id %}
 
   <!-- Sidebar -->
-  <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20" style="background: linear-gradient(160deg, #2e5090 0%, #1c3461 60%, #162a50 100%)">
+  <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20" style="background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%)">
 
     <!-- Logo (immer zentriert, immer sichtbar) -->
     <div class="flex items-center justify-center px-1 mb-2" style="min-height:64px">
@@ -211,7 +211,7 @@
           {% if current_user_avatar %}
           <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover">
           {% else %}
-          <div class="w-full h-full bg-[#2a4a8a] flex items-center justify-center">
+          <div class="w-full h-full bg-[#059a94] flex items-center justify-center">
             <span class="text-white text-xs font-bold">{{ (session.display_name or session.username)[0].upper() }}</span>
           </div>
           {% endif %}
@@ -277,7 +277,7 @@
             <div class="flex gap-2 mb-2">
               <input name="body" id="feed-input" placeholder="Nachricht schreiben..." autocomplete="off"
                      class="flex-1 bg-white/80 border border-gray-300/60 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
-              <button type="submit" class="bg-[#1c3461] text-white px-3 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors shrink-0">
+              <button type="submit" class="bg-[#07B0AA] text-white px-3 py-2 rounded-xl hover:bg-[#059a94] transition-colors shrink-0">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                 </svg>
@@ -296,7 +296,7 @@
 
   <!-- Reopen team-feed button -->
   <button id="feed-reopen-btn" onclick="openFeed()" title="Team-Feed öffnen"
-          class="is-hidden fixed bottom-5 right-5 z-30 bg-[#1c3461] text-white p-3 rounded-full shadow-lg hover:bg-[#2a4a8a] transition-colors">
+          class="is-hidden fixed bottom-5 right-5 z-30 bg-[#07B0AA] text-white p-3 rounded-full shadow-lg hover:bg-[#059a94] transition-colors">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
     </svg>
@@ -368,7 +368,7 @@ function avatarHtml(m, size='w-6 h-6') {
     return `<img src="/avatar/${m.user_id}" class="${size} rounded-full object-cover shrink-0 border border-white/40">`;
   }
   const label = (m.display_name || m.username || '?')[0].toUpperCase();
-  return `<div class="${size} rounded-full bg-[#1c3461] flex items-center justify-center shrink-0"><span class="text-white text-[10px] font-bold">${esc(label)}</span></div>`;
+  return `<div class="${size} rounded-full bg-[#07B0AA] flex items-center justify-center shrink-0"><span class="text-white text-[10px] font-bold">${esc(label)}</span></div>`;
 }
 
 function renderFeedMsg(m) {
@@ -404,7 +404,7 @@ function renderFeedMsg(m) {
       <div class="flex items-center justify-between mb-1.5">
         <div class="flex items-center gap-2">
           ${avatarHtml(m)}
-          <span class="text-xs font-semibold text-[#1c3461]">${esc(displayName)}</span>
+          <span class="text-xs font-semibold text-[#07B0AA]">${esc(displayName)}</span>
         </div>
         <div class="flex items-center gap-1">
           <span class="text-[10px] text-gray-400">${m.created_at.substring(11,16)}</span>

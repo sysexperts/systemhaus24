@@ -39,7 +39,7 @@
           <option value="admin">Administrator</option>
         </select>
       </div>
-      <button type="submit" class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      <button type="submit" class="w-full bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
         Benutzer anlegen
       </button>
     </form>
@@ -52,7 +52,7 @@
       {% for u in users %}
       {% if u.role != 'promoter' %}
       <div class="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-        <div class="w-9 h-9 rounded-full bg-[#1c3461] flex items-center justify-center text-white text-sm font-bold shrink-0">
+        <div class="w-9 h-9 rounded-full bg-[#07B0AA] flex items-center justify-center text-white text-sm font-bold shrink-0">
           {{ (u.display_name or u.username)[0].upper() }}
         </div>
         <div class="flex-1 min-w-0">

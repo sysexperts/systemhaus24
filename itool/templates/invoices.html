@@ -5,7 +5,7 @@
 <div class="flex items-center justify-between mb-5">
   <h1 class="text-lg font-semibold text-gray-600">Rechnungen</h1>
   <a href="{{ url_for('invoice_new') }}"
-     class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+     class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
     + Neue Rechnung
   </a>
 </div>
@@ -45,7 +45,7 @@
       </td>
       <td class="px-5 py-3 text-right">
         <div class="flex items-center justify-end gap-3">
-          <a href="{{ url_for('invoice_view', iid=inv.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Ansehen</a>
+          <a href="{{ url_for('invoice_view', iid=inv.id) }}" class="text-[#07B0AA] hover:underline text-xs font-medium">Ansehen</a>
           <form method="POST" action="{{ url_for('invoice_delete', iid=inv.id) }}" onsubmit="return confirm('Rechnung löschen?')">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>

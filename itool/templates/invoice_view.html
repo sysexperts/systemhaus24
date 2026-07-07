@@ -32,7 +32,7 @@
     Drucken / PDF
   </button>
   <button onclick="document.getElementById('email-modal').classList.remove('hidden')"
-          class="px-4 py-2 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors flex items-center gap-2">
+          class="px-4 py-2 rounded-xl text-sm bg-[#07B0AA] text-white hover:bg-[#059a94] transition-colors flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
     Per E-Mail senden
   </button>
@@ -56,7 +56,7 @@
       {% if cfg.get('company_email') %}<div class="text-sm text-gray-400">{{ cfg.get('company_email') }}</div>{% endif %}
     </div>
     <div class="text-right">
-      <div class="text-3xl font-black text-[#1c3461] tracking-widest mb-3">RECHNUNG</div>
+      <div class="text-3xl font-black text-[#07B0AA] tracking-widest mb-3">RECHNUNG</div>
       <table class="text-sm text-right ml-auto">
         <tr><td class="text-gray-400 pr-4">Rechnungsnr.</td><td class="font-mono font-semibold text-gray-700">{{ invoice.number }}</td></tr>
         <tr><td class="text-gray-400 pr-4">Datum</td><td class="text-gray-700">{{ invoice.date }}</td></tr>
@@ -114,9 +114,9 @@
       <tr><td colspan="4" class="py-1 text-right text-sm text-gray-400">zzgl. 19% MwSt.</td>
           <td class="py-1 text-right text-sm text-gray-400">{{ '%.2f'|format(total * 0.19) }} €</td></tr>
       {% endif %}
-      <tr class="border-t-2 border-[#1c3461]/20">
+      <tr class="border-t-2 border-[#07B0AA]/20">
         <td colspan="4" class="py-3 text-right font-bold text-gray-800">Gesamtbetrag</td>
-        <td class="py-3 text-right font-bold text-[#1c3461] text-lg">
+        <td class="py-3 text-right font-bold text-[#07B0AA] text-lg">
           {{ '%.2f'|format(total if kleingewerbe else total * 1.19) }} €
         </td>
       </tr>
@@ -202,7 +202,7 @@ Mit freundlichen Grüßen
         Hinweis: Die Rechnung wird als Text gesendet. Für PDF-Anhang bitte zuerst drucken und als PDF speichern.
       </div>
       <div class="flex gap-3 pt-1">
-        <button type="submit" class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+        <button type="submit" class="flex-1 bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
           Senden
         </button>
         <button type="button" onclick="document.getElementById('email-modal').classList.add('hidden')"

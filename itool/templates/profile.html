@@ -19,7 +19,7 @@
       {% if current_user_avatar %}
       <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover" id="avatar-preview">
       {% else %}
-      <div class="w-full h-full bg-[#1c3461] flex items-center justify-center">
+      <div class="w-full h-full bg-[#07B0AA] flex items-center justify-center">
         <span class="text-white text-3xl font-bold">{{ (user.display_name or user.username)[0].upper() }}</span>
       </div>
       {% endif %}
@@ -44,7 +44,7 @@
                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
       <p class="text-xs text-gray-400">Benutzername: <span class="font-medium text-gray-600">{{ user.username }}</span></p>
-      <button type="submit" class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      <button type="submit" class="w-full bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
         Speichern
       </button>
     </form>
@@ -70,7 +70,7 @@
         <input name="confirm_password" type="password" required minlength="6"
                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
-      <button type="submit" class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      <button type="submit" class="w-full bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
         Passwort ändern
       </button>
     </form>
