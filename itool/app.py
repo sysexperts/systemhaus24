@@ -52,7 +52,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE  = "Lax",
     SESSION_COOKIE_SECURE    = True,
     PERMANENT_SESSION_LIFETIME = 2 * 3600,  # 8 hours
-    MAX_CONTENT_LENGTH       = 20 * 1024 * 1024,  # 20 MB upload limit
+    MAX_CONTENT_LENGTH       = 100 * 1024 * 1024,  # 100 MB upload limit
 )
 
 # Password encryption for DB-stored secrets (SMTP/IMAP)
