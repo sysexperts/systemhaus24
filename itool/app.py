@@ -24,6 +24,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from database import get_db, init_db, next_customer_number
 
+import re as _re
+try:
+    from pypdf import PdfReader
+except Exception:
+    PdfReader = None
+try:
+    import pytesseract
+    from pdf2image import convert_from_path
+    from PIL import Image
+except Exception:
+    pytesseract = None
+    convert_from_path = None
+    Image = None
+
 app = Flask(__name__)
 _secret = os.environ.get("SECRET_KEY", "")
 if not _secret or _secret == "dev-secret-key":
@@ -138,6 +152,8 @@ def _clear_attempts(ip):
 
 UPLOAD_DIR  = os.path.join(os.path.dirname(__file__), "data", "uploads")
 DOC_STORE   = os.path.join(os.path.dirname(__file__), "data", "documents")
+IMPORT_STORE = os.path.join(os.path.dirname(__file__), "data", "accounting_imports")
+IMPORT_ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg"}
 
 
 def get_feed_data():
@@ -2179,6 +2195,298 @@ def time_report():
                            date_from=date_from, date_to=date_to,
                            by_customer=by_customer, by_ticket=by_ticket,
                            by_user=by_user, total_minutes=total_minutes)
+
+
+# ── Buchhaltung: Dokumente Import (automatische Rechnungsanalyse) ─────────────
+
+def _extract_text_from_file(path, mime_type):
+    """Best-effort text extraction: PDF text layer first, OCR fallback for scans/images."""
+    text = ""
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext == ".pdf" and PdfReader is not None:
+        try:
+            reader = PdfReader(path)
+            text = "\n".join((p.extract_text() or "") for p in reader.pages)
+        except Exception:
+            text = ""
+
+    if len(text.strip()) < 30 and pytesseract is not None:
+        try:
+            if ext == ".pdf" and convert_from_path is not None:
+                pages = convert_from_path(path, dpi=200)
+                text = "\n".join(pytesseract.image_to_string(p, lang="deu+eng") for p in pages)
+            elif ext in (".png", ".jpg", ".jpeg") and Image is not None:
+                img = Image.open(path)
+                text = pytesseract.image_to_string(img, lang="deu+eng")
+        except Exception:
+            pass
+
+    return text or ""
+
+
+_DATE_PATTERNS = [
+    _re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b"),
+    _re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"),
+]
+_DATE_CONTEXT_RE = _re.compile(r"(rechnungsdatum|datum|invoice date|date)", _re.I)
+_AMOUNT_CONTEXT_RE = _re.compile(r"(gesamtbetrag|gesamtsumme|rechnungsbetrag|total|summe|zu zahlen|endbetrag)", _re.I)
+_AMOUNT_RE = _re.compile(r"(\d{1,3}(?:[.\s]\d{3})*,\d{2}|\d+\.\d{2})\s*(?:€|eur)?")
+_INVOICE_NO_RE = _re.compile(r"(rechnungs(?:-|\s)?nr\.?|rechnungsnummer|invoice\s?(?:no|nr)\.?)\s*[:#]?\s*([A-Za-z0-9\-\/]+)", _re.I)
+
+
+def _parse_date_token(d, m, y):
+    try:
+        d, m, y = int(d), int(m), int(y)
+        if y < 100:
+            y += 2000
+        return date(y, m, d)
+    except Exception:
+        return None
+
+
+def _extract_invoice_date(text):
+    lines = text.splitlines()
+    # Prefer a date on a line that mentions "Datum" etc.
+    for line in lines:
+        if _DATE_CONTEXT_RE.search(line):
+            for pat in _DATE_PATTERNS:
+                m = pat.search(line)
+                if m:
+                    g = m.groups()
+                    d = _parse_date_token(g[0], g[1], g[2]) if len(g[2]) == 4 else _parse_date_token(g[2], g[1], g[0])
+                    if d:
+                        return d
+    # Fallback: first plausible date anywhere in the document
+    for pat in _DATE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            g = m.groups()
+            d = _parse_date_token(g[0], g[1], g[2]) if len(g[2]) == 4 else _parse_date_token(g[2], g[1], g[0])
+            if d:
+                return d
+    return None
+
+
+def _amount_to_float(s):
+    s = s.strip()
+    if "," in s and s.rfind(",") > s.rfind("."):
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        s = s.replace(",", "")
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def _extract_amount(text):
+    lines = text.splitlines()
+    for line in lines:
+        if _AMOUNT_CONTEXT_RE.search(line):
+            matches = _AMOUNT_RE.findall(line)
+            if matches:
+                val = _amount_to_float(matches[-1])
+                if val:
+                    return val
+    # Fallback: largest amount mentioned anywhere (often the grand total)
+    all_amounts = [v for v in (_amount_to_float(m) for m in _AMOUNT_RE.findall(text)) if v]
+    return max(all_amounts) if all_amounts else None
+
+
+def _extract_invoice_number(text):
+    m = _INVOICE_NO_RE.search(text)
+    return m.group(2).strip() if m else None
+
+
+def _extract_vendor(text):
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) >= 3 and not _DATE_CONTEXT_RE.search(line) and not _AMOUNT_CONTEXT_RE.search(line):
+            return line[:120]
+    return None
+
+
+def analyze_invoice_file(path, mime_type):
+    """Returns a dict with best-effort extracted invoice metadata."""
+    text = _extract_text_from_file(path, mime_type)
+    inv_date = _extract_invoice_date(text)
+    amount = _extract_amount(text)
+    result = {
+        "vendor": _extract_vendor(text),
+        "invoice_number": _extract_invoice_number(text),
+        "doc_date": inv_date.isoformat() if inv_date else None,
+        "amount_gross": amount,
+        "raw_text": text[:20000],
+        "status": "processed" if (inv_date and amount) else "needs_review",
+    }
+    return result
+
+
+@app.route("/accounting/import")
+@login_required
+def accounting_import():
+    db = get_db()
+    rows = db.execute("SELECT * FROM imported_invoices ORDER BY year DESC NULLS LAST, month DESC NULLS LAST, created_at DESC").fetchall()
+    db.close()
+
+    grouped = {}
+    for r in rows:
+        y = r["year"] or 0
+        m = r["month"] or 0
+        grouped.setdefault(y, {}).setdefault(m, []).append(r)
+
+    return render_template("accounting_import.html", grouped=grouped)
+
+
+@app.route("/accounting/import/upload", methods=["POST"])
+@login_required
+def accounting_import_upload():
+    doc_type = request.form.get("doc_type", "expense")
+    if doc_type not in ("expense", "income"):
+        doc_type = "expense"
+
+    kleingewerbe = None
+    db = get_db()
+    kg_row = db.execute("SELECT value FROM settings WHERE key='company_kleingewerbe'").fetchone()
+    is_kg = (kg_row and kg_row["value"] == "1")
+    default_tax_rate = 0 if is_kg else 19
+
+    files = request.files.getlist("files")
+    count = 0
+    for f in files:
+        if not f.filename:
+            continue
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in IMPORT_ALLOWED_EXT:
+            continue
+
+        today = date.today()
+        year, month = today.year, today.month
+        target_dir = os.path.join(IMPORT_STORE, str(year), f"{month:02d}")
+        os.makedirs(target_dir, exist_ok=True)
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        full_path = os.path.join(target_dir, safe_name)
+        f.save(full_path)
+        mime, _ = mimetypes.guess_type(f.filename)
+
+        info = analyze_invoice_file(full_path, mime)
+        if info["doc_date"]:
+            d = date.fromisoformat(info["doc_date"])
+            year, month = d.year, d.month
+            # move file into the correct year/month folder if different
+            correct_dir = os.path.join(IMPORT_STORE, str(year), f"{month:02d}")
+            if correct_dir != target_dir:
+                os.makedirs(correct_dir, exist_ok=True)
+                new_full_path = os.path.join(correct_dir, safe_name)
+                shutil.move(full_path, new_full_path)
+                full_path = new_full_path
+
+        rel_path = os.path.relpath(full_path, IMPORT_STORE)
+
+        expense_id = None
+        if doc_type == "expense":
+            amount_gross = info["amount_gross"] or 0
+            tax_rate = default_tax_rate
+            amount_netto = amount_gross / (1 + tax_rate / 100.0) if tax_rate else amount_gross
+            exp_cur = db.execute(
+                """INSERT INTO expenses (date, category, description, amount_netto, tax_rate, receipt_file)
+                   VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (info["doc_date"] or today.isoformat(), "Rechnungsimport",
+                 info["vendor"] or f.filename, amount_netto, tax_rate, rel_path)
+            )
+            expense_id = exp_cur.fetchone()[0]
+
+        db.execute("""INSERT INTO imported_invoices
+                      (doc_type, file_path, original_filename, mime_type, vendor, invoice_number,
+                       doc_date, amount_gross, tax_rate, year, month, status, raw_text, expense_id, uploaded_by)
+                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                   (doc_type, rel_path, f.filename, mime, info["vendor"], info["invoice_number"],
+                    info["doc_date"], info["amount_gross"], default_tax_rate, year, month,
+                    info["status"], info["raw_text"], expense_id, session["username"]))
+        db.commit()
+        count += 1
+
+    db.close()
+    flash(f"{count} Datei(en) importiert und analysiert", "success")
+    return redirect(url_for("accounting_import"))
+
+
+@app.route("/accounting/import/<int:iid>/preview")
+@login_required
+def accounting_import_preview(iid):
+    db = get_db()
+    row = db.execute("SELECT * FROM imported_invoices WHERE id=%s", (iid,)).fetchone()
+    db.close()
+    if not row:
+        abort(404)
+    full_path = os.path.join(IMPORT_STORE, row["file_path"])
+    return send_file(full_path, mimetype=row["mime_type"] or "application/octet-stream")
+
+
+@app.route("/accounting/import/<int:iid>/edit", methods=["POST"])
+@login_required
+def accounting_import_edit(iid):
+    db = get_db()
+    row = db.execute("SELECT * FROM imported_invoices WHERE id=%s", (iid,)).fetchone()
+    if not row:
+        db.close()
+        abort(404)
+
+    vendor = request.form.get("vendor", "").strip() or None
+    invoice_number = request.form.get("invoice_number", "").strip() or None
+    doc_date = request.form.get("doc_date", "").strip() or None
+    amount_gross = request.form.get("amount_gross", "").strip()
+    tax_rate = request.form.get("tax_rate", "").strip()
+
+    try:
+        amount_gross = float(amount_gross.replace(",", ".")) if amount_gross else None
+    except ValueError:
+        amount_gross = row["amount_gross"]
+    try:
+        tax_rate = float(tax_rate.replace(",", ".")) if tax_rate else row["tax_rate"]
+    except ValueError:
+        tax_rate = row["tax_rate"]
+
+    year, month = row["year"], row["month"]
+    if doc_date:
+        try:
+            d = date.fromisoformat(doc_date)
+            year, month = d.year, d.month
+        except ValueError:
+            doc_date = row["doc_date"]
+
+    db.execute("""UPDATE imported_invoices SET vendor=%s, invoice_number=%s, doc_date=%s,
+                  amount_gross=%s, tax_rate=%s, year=%s, month=%s, status='processed' WHERE id=%s""",
+               (vendor, invoice_number, doc_date, amount_gross, tax_rate, year, month, iid))
+
+    if row["expense_id"]:
+        amount_netto = amount_gross / (1 + tax_rate / 100.0) if amount_gross and tax_rate else amount_gross
+        db.execute("""UPDATE expenses SET date=%s, description=%s, amount_netto=%s, tax_rate=%s WHERE id=%s""",
+                   (doc_date or row["doc_date"], vendor or row["vendor"], amount_netto, tax_rate, row["expense_id"]))
+
+    db.commit()
+    db.close()
+    flash("Dokument aktualisiert", "success")
+    return redirect(url_for("accounting_import"))
+
+
+@app.route("/accounting/import/<int:iid>/delete", methods=["POST"])
+@login_required
+def accounting_import_delete(iid):
+    db = get_db()
+    row = db.execute("SELECT * FROM imported_invoices WHERE id=%s", (iid,)).fetchone()
+    if row:
+        full_path = os.path.join(IMPORT_STORE, row["file_path"])
+        if os.path.exists(full_path):
+            os.remove(full_path)
+        if row["expense_id"]:
+            db.execute("DELETE FROM expenses WHERE id=%s", (row["expense_id"],))
+        db.execute("DELETE FROM imported_invoices WHERE id=%s", (iid,))
+        db.commit()
+    db.close()
+    flash("Dokument gelöscht", "success")
+    return redirect(url_for("accounting_import"))
 
 
 # ── Buchhaltung ───────────────────────────────────────────────────────────────
