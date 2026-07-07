@@ -702,8 +702,11 @@ def invoices():
         FROM invoices i JOIN customers c ON i.customer_id=c.id
         ORDER BY i.created_at DESC
     """).fetchall()
+    archived = db.execute("""
+        SELECT * FROM imported_invoices WHERE doc_type='income' ORDER BY doc_date DESC NULLS LAST, created_at DESC
+    """).fetchall()
     db.close()
-    return render_template("invoices.html", invoices=rows)
+    return render_template("invoices.html", invoices=rows, archived=archived)
 
 
 @app.route("/invoices/new", methods=["GET", "POST"])
@@ -2225,10 +2228,17 @@ def _extract_text_from_file(path, mime_type):
     return text or ""
 
 
+_GERMAN_MONTHS = {
+    "januar": 1, "februar": 2, "märz": 3, "maerz": 3, "april": 4, "mai": 5, "juni": 6,
+    "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
+}
 _DATE_PATTERNS = [
     _re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b"),
     _re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"),
 ]
+_DATE_NAMED_MONTH_RE = _re.compile(
+    r"\b(\d{1,2})\.?\s*(Januar|Februar|Ma[eä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s*(\d{4})\b",
+    _re.I)
 _DATE_CONTEXT_RE = _re.compile(r"(rechnungsdatum|datum|invoice date|date)", _re.I)
 _AMOUNT_CONTEXT_RE = _re.compile(r"(gesamtbetrag|gesamtsumme|rechnungsbetrag|total|summe|zu zahlen|endbetrag)", _re.I)
 _AMOUNT_RE = _re.compile(r"(\d{1,3}(?:[.\s]\d{3})*,\d{2}|\d+\.\d{2})\s*(?:€|eur)?")
@@ -2245,11 +2255,29 @@ def _parse_date_token(d, m, y):
         return None
 
 
+def _parse_named_month_match(m):
+    try:
+        day = int(m.group(1))
+        month_name = m.group(2).lower().replace("ä", "ae")
+        month = _GERMAN_MONTHS.get(month_name)
+        year = int(m.group(3))
+        if month:
+            return date(year, month, day)
+    except Exception:
+        pass
+    return None
+
+
 def _extract_invoice_date(text):
     lines = text.splitlines()
     # Prefer a date on a line that mentions "Datum" etc.
     for line in lines:
         if _DATE_CONTEXT_RE.search(line):
+            m = _DATE_NAMED_MONTH_RE.search(line)
+            if m:
+                d = _parse_named_month_match(m)
+                if d:
+                    return d
             for pat in _DATE_PATTERNS:
                 m = pat.search(line)
                 if m:
@@ -2258,6 +2286,11 @@ def _extract_invoice_date(text):
                     if d:
                         return d
     # Fallback: first plausible date anywhere in the document
+    m = _DATE_NAMED_MONTH_RE.search(text)
+    if m:
+        d = _parse_named_month_match(m)
+        if d:
+            return d
     for pat in _DATE_PATTERNS:
         m = pat.search(text)
         if m:

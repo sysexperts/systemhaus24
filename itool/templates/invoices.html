@@ -59,4 +59,41 @@
     </tbody>
   </table>
 </div>
+
+{% if archived %}
+<div class="mt-8">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-base font-semibold text-gray-700">Ausgestellte Rechnungen (Archiv-Import)</h2>
+    <a href="{{ url_for('accounting_import') }}" class="text-xs text-[#1c3461] hover:underline">Dokumente Import →</a>
+  </div>
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Datum</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Aussteller/Kunde</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Rechnungsnr.</th>
+          <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Betrag</th>
+          <th class="px-5 py-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in archived %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+          <td class="px-5 py-3 text-gray-500 text-xs">{{ a.doc_date or '–' }}</td>
+          <td class="px-5 py-3 text-gray-700">{{ a.vendor or a.original_filename }}</td>
+          <td class="px-5 py-3 text-gray-500 text-xs">{{ a.invoice_number or '–' }}</td>
+          <td class="px-5 py-3 text-right font-semibold text-gray-800">
+            {% if a.amount_gross %}{{ '%.2f'|format(a.amount_gross) }} €{% else %}–{% endif %}
+          </td>
+          <td class="px-5 py-3 text-right">
+            <a href="{{ url_for('accounting_import_preview', iid=a.id) }}" target="_blank" class="text-[#1c3461] hover:underline text-xs font-medium">Ansehen</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
