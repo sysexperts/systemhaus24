@@ -18,7 +18,7 @@
       CSV Export
     </a>
     <a href="{{ url_for('invoice_new') }}"
-       class="flex items-center gap-2 bg-[#07B0AA] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#059a94] transition-colors font-medium">
+       class="flex items-center gap-2 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
       </svg>
@@ -29,7 +29,7 @@
 
 <!-- KPI Row -->
 <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
-  <div class="bg-gradient-to-br from-[#07B0AA] to-[#059a94] rounded-2xl p-5 shadow-md relative overflow-hidden">
+  <div class="bg-gradient-to-br from-[#1c3461] to-[#2a4a8a] rounded-2xl p-5 shadow-md relative overflow-hidden">
     <div class="absolute -right-4 -top-4 w-20 h-20 bg-white/5 rounded-full"></div>
     <p class="text-blue-200 text-xs font-medium uppercase tracking-wider mb-1">Umsatz Monat</p>
     <p class="text-3xl font-bold text-white">{{ '%.2f'|format(brutto(stats.revenue_month)) }} €</p>
@@ -91,7 +91,7 @@
   <div class="xl:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <div class="w-2 h-2 rounded-full bg-[#07B0AA]"></div>
+        <div class="w-2 h-2 rounded-full bg-[#1c3461]"></div>
         <h2 class="text-sm font-semibold text-gray-700">Monatsverlauf (12 Monate)</h2>
       </div>
     </div>
@@ -119,9 +119,9 @@
           labels,
           datasets: [{
             data,
-            borderColor: '#07B0AA',
+            borderColor: '#1c3461',
             borderWidth: 2.5,
-            pointBackgroundColor: '#07B0AA',
+            pointBackgroundColor: '#1c3461',
             pointRadius: 4,
             pointHoverRadius: 6,
             fill: true,
@@ -137,7 +137,7 @@
               callbacks: {
                 label: ctx => ' ' + ctx.parsed.y.toFixed(2).replace('.', ',') + ' €'
               },
-              backgroundColor: '#07B0AA',
+              backgroundColor: '#1c3461',
               titleColor: '#93c5fd',
               bodyColor: '#fff',
               padding: 10,
@@ -374,12 +374,12 @@
           <label class="block text-xs font-medium text-gray-500 mb-1">Datum *</label>
           <input type="date" name="date" required
                  value="{{ now.strftime('%Y-%m-%d') }}"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Kategorie</label>
           <select name="category"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
             <option>Software & Lizenzen</option>
             <option>Hardware</option>
             <option>Büro & Verbrauch</option>
@@ -395,18 +395,18 @@
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Beschreibung *</label>
         <input type="text" name="description" required placeholder="z.B. Microsoft 365 Jahresabo"
-               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">Betrag Netto (€) *</label>
           <input type="number" name="amount_netto" step="0.01" min="0" required placeholder="0.00"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-500 mb-1">MwSt. (%)</label>
           <select name="tax_rate"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
             <option value="19">19%</option>
             <option value="7">7%</option>
             <option value="0">0%</option>
@@ -416,17 +416,17 @@
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Beleg hochladen (optional)</label>
         <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png"
-               class="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#07B0AA] file:text-white hover:file:bg-[#059a94]">
+               class="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1c3461] file:text-white hover:file:bg-[#2a4a8a]">
         <p class="text-xs text-gray-400 mt-1">PDF, JPG oder PNG · max. 10 MB</p>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-500 mb-1">Notiz</label>
         <textarea name="notes" rows="2" placeholder="Interne Anmerkungen..."
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30 resize-none"></textarea>
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 resize-none"></textarea>
       </div>
       <div class="flex gap-3 pt-2">
         <button type="submit"
-                class="flex-1 bg-[#07B0AA] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+                class="flex-1 bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
           Speichern
         </button>
         <button type="button" onclick="document.getElementById('expenseModal').classList.add('hidden')"

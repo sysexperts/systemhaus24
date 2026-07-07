@@ -51,21 +51,21 @@
           ] %}
           <label class="cursor-pointer">
             <input type="radio" name="type" value="{{ val }}" class="sr-only peer" {% if loop.first %}checked{% endif %}>
-            <span class="text-xs font-medium px-3 py-1.5 rounded-xl border border-gray-200 peer-checked:bg-[#07B0AA] peer-checked:text-white peer-checked:border-[#07B0AA] hover:bg-gray-50 transition-colors block">
+            <span class="text-xs font-medium px-3 py-1.5 rounded-xl border border-gray-200 peer-checked:bg-[#1c3461] peer-checked:text-white peer-checked:border-[#1c3461] hover:bg-gray-50 transition-colors block">
               {{ icon }} {{ label }}
             </span>
           </label>
           {% endfor %}
         </div>
         <textarea name="body" rows="2" placeholder="Was ist passiert? Was wurde besprochen?" required
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30 resize-none"></textarea>
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 resize-none"></textarea>
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2 flex-1">
             <label class="text-xs text-gray-400 shrink-0">Wiedervorlage:</label>
             <input type="date" name="next_followup" value="{{ lead.next_followup or '' }}"
-                   class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#07B0AA]/30">
+                   class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#1c3461]/30">
           </div>
-          <button type="submit" class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors shrink-0">
+          <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors shrink-0">
             Speichern
           </button>
         </div>
@@ -144,26 +144,26 @@
         <div>
           <label class="block text-xs text-gray-400 mb-1">Ansprechpartner *</label>
           <input type="text" name="contact_name" value="{{ lead.contact_name }}" required
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Firma</label>
           <input type="text" name="company" value="{{ lead.company or '' }}"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">E-Mail</label>
           <input type="email" name="contact_email" value="{{ lead.contact_email or '' }}"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Telefon</label>
           <input type="text" name="contact_phone" value="{{ lead.contact_phone or '' }}"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Quelle</label>
-          <select name="source" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+          <select name="source" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
             {% for s in sources %}
             <option {% if lead.source == s %}selected{% endif %}>{{ s }}</option>
             {% endfor %}
@@ -172,19 +172,19 @@
         <div>
           <label class="block text-xs text-gray-400 mb-1">Deal-Wert (€)</label>
           <input type="number" name="deal_value" step="0.01" value="{{ lead.deal_value or 0 }}"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Wiedervorlage</label>
           <input type="date" name="next_followup" value="{{ lead.next_followup or '' }}"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30">
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Interne Notiz</label>
           <textarea name="notes" rows="3"
-                    class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]/30 resize-none">{{ lead.notes or '' }}</textarea>
+                    class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 resize-none">{{ lead.notes or '' }}</textarea>
         </div>
-        <button type="submit" class="w-full bg-[#07B0AA] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+        <button type="submit" class="w-full bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
           Speichern
         </button>
       </form>

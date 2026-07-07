@@ -5,7 +5,7 @@
 <div class="flex items-center justify-between mb-5">
   <h1 class="text-lg font-semibold text-gray-600">Tickets</h1>
   <a href="{{ url_for('ticket_new') }}"
-     class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+     class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
     + Neues Ticket
   </a>
 </div>
@@ -15,7 +15,7 @@
   {% for val, label in [('','Alle'),('open','Offen'),('in_progress','In Arbeit'),('closed','Gelöst')] %}
   <a href="{{ url_for('tickets', status=val) }}"
      class="px-4 py-1.5 rounded-xl text-sm font-medium transition-colors
-       {% if status==val %}bg-[#07B0AA] text-white shadow-sm{% else %}bg-white/70 text-gray-500 hover:bg-white/90{% endif %}">
+       {% if status==val %}bg-[#1c3461] text-white shadow-sm{% else %}bg-white/70 text-gray-500 hover:bg-white/90{% endif %}">
     {{ label }}
   </a>
   {% endfor %}
@@ -39,7 +39,7 @@
       <td class="px-5 py-3">
         <div class="flex items-center gap-2">
           {% if not t.is_read %}
-          <span class="w-2 h-2 rounded-full bg-[#07B0AA] shrink-0"></span>
+          <span class="w-2 h-2 rounded-full bg-[#1c3461] shrink-0"></span>
           {% else %}
           <span class="w-2 h-2 shrink-0"></span>
           {% endif %}
@@ -67,7 +67,7 @@
       <td class="px-5 py-3 text-gray-400 text-xs">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '–' }}</td>
       <td class="px-5 py-3 text-right">
         <div class="flex items-center justify-end gap-3">
-          <a href="{{ url_for('ticket_edit', tid=t.id) }}" class="text-[#07B0AA] hover:underline text-xs font-medium">Bearbeiten</a>
+          <a href="{{ url_for('ticket_edit', tid=t.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</a>
           <form method="POST" action="{{ url_for('ticket_delete', tid=t.id) }}" onsubmit="return confirm('Ticket löschen?')">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>

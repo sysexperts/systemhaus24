@@ -66,13 +66,13 @@
       <div class="flex items-center gap-3 pt-1">
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" name="active" value="1" {% if not a or a.active %}checked{% endif %}
-                 class="w-4 h-4 rounded border-gray-300 text-[#07B0AA]">
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]">
           <span class="text-sm text-gray-600">Aktiv (in Rechnungen verwendbar)</span>
         </label>
       </div>
 
       <div class="flex gap-3 pt-2">
-        <button type="submit" class="bg-[#07B0AA] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+        <button type="submit" class="bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
           Speichern
         </button>
         <a href="{{ url_for('articles') }}" class="px-6 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">

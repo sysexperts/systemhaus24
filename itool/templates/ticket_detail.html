@@ -12,7 +12,7 @@
 <div class="flex items-start justify-between mb-5 gap-4">
   <div class="flex-1">
     <div class="flex items-center gap-2 text-xs text-gray-400 mb-1">
-      <a href="{{ url_for('tickets') }}" class="hover:text-[#07B0AA]">Tickets</a>
+      <a href="{{ url_for('tickets') }}" class="hover:text-[#1c3461]">Tickets</a>
       <span>/</span>
       <span>Ticket #{{ ticket.id }}</span>
     </div>
@@ -130,7 +130,7 @@
               </svg>
             </div>
             {% else %}
-            <div class="w-7 h-7 rounded-full bg-[#07B0AA] flex items-center justify-center">
+            <div class="w-7 h-7 rounded-full bg-[#1c3461] flex items-center justify-center">
               <span class="text-white text-[10px] font-bold">{{ u.username[0].upper() }}</span>
             </div>
             {% endif %}
@@ -184,7 +184,7 @@
             <span class="text-xs text-gray-400">min</span>
           </div>
           <div class="flex gap-2">
-            <button type="submit" class="bg-[#07B0AA] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+            <button type="submit" class="bg-[#1c3461] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
               Update speichern
             </button>
             <button type="submit" name="status" value="closed"
@@ -227,7 +227,7 @@
                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
         </div>
         <button type="submit"
-                class="w-full bg-[#07B0AA] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+                class="w-full bg-[#1c3461] text-white py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
           E-Mail senden
         </button>
       </form>
@@ -248,7 +248,7 @@
         {% if ticket.customer_name %}
         <div class="flex justify-between">
           <span class="text-gray-400">Kunde</span>
-          <a href="{{ url_for('customers') }}" class="text-[#07B0AA] hover:underline text-xs">{{ ticket.customer_name }}</a>
+          <a href="{{ url_for('customers') }}" class="text-[#1c3461] hover:underline text-xs">{{ ticket.customer_name }}</a>
         </div>
         {% endif %}
       </div>

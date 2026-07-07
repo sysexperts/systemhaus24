@@ -5,7 +5,7 @@
 <div class="flex items-center justify-between mb-5">
   <h1 class="text-lg font-semibold text-gray-600">Kunden</h1>
   <a href="{{ url_for('customer_new') }}"
-     class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+     class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
     + Neuer Kunde
   </a>
 </div>
@@ -21,7 +21,7 @@
       <option value="customer" {% if status=='customer' %}selected{% endif %}>Kunde</option>
       <option value="inactive" {% if status=='inactive' %}selected{% endif %}>Inaktiv</option>
     </select>
-    <button type="submit" class="bg-[#07B0AA] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#059a94] transition-colors">Suchen</button>
+    <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#2a4a8a] transition-colors">Suchen</button>
   </form>
 </div>
 
@@ -44,7 +44,7 @@
     <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
       <td class="px-5 py-3 text-xs text-gray-400 font-mono">{{ c.customer_number or '–' }}</td>
       <td class="px-5 py-3">
-        <a href="{{ url_for('customer_detail', cid=c.id) }}" class="font-medium text-gray-800 hover:text-[#07B0AA] hover:underline">{{ c.name }}</a>
+        <a href="{{ url_for('customer_detail', cid=c.id) }}" class="font-medium text-gray-800 hover:text-[#1c3461] hover:underline">{{ c.name }}</a>
         {% if c.company %}<div class="text-xs text-gray-400">{{ c.company }}</div>{% endif %}
       </td>
       <td class="px-5 py-3 text-gray-500">{{ c.email or '–' }}</td>
@@ -67,7 +67,7 @@
             <button class="text-xs px-2.5 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors font-medium whitespace-nowrap">→ Kunde</button>
           </form>
           {% endif %}
-          <a href="{{ url_for('customer_edit', cid=c.id) }}" class="text-[#07B0AA] hover:underline text-xs font-medium">Bearbeiten</a>
+          <a href="{{ url_for('customer_edit', cid=c.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</a>
           <form method="POST" action="{{ url_for('customer_delete', cid=c.id) }}" onsubmit="return confirm('Wirklich löschen?')">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>

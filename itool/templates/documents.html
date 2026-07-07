@@ -14,10 +14,10 @@
     <h1 class="text-lg font-semibold text-gray-600">Dokumente</h1>
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-1.5 mt-1 text-sm text-gray-400">
-      <a href="{{ url_for('documents') }}" class="hover:text-[#07B0AA]">Alle Dokumente</a>
+      <a href="{{ url_for('documents') }}" class="hover:text-[#1c3461]">Alle Dokumente</a>
       {% for crumb in crumbs %}
       <span>/</span>
-      <a href="{{ url_for('documents', folder_id=crumb.id) }}" class="hover:text-[#07B0AA]">{{ crumb.name }}</a>
+      <a href="{{ url_for('documents', folder_id=crumb.id) }}" class="hover:text-[#1c3461]">{{ crumb.name }}</a>
       {% endfor %}
     </nav>
   </div>
@@ -29,7 +29,7 @@
       Neuer Ordner
     </button>
     <!-- Upload button -->
-    <label class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-[#07B0AA] text-white hover:bg-[#059a94] transition-colors cursor-pointer shadow-sm">
+    <label class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors cursor-pointer shadow-sm">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
       Hochladen
       <form id="upload-form" method="POST" action="{{ url_for('document_upload') }}" enctype="multipart/form-data">
@@ -87,11 +87,11 @@
       <!-- Name -->
       <td class="px-4 py-3">
         {% if item.type == 'folder' %}
-        <a href="{{ url_for('documents', folder_id=item.id) }}" class="font-medium text-[#07B0AA] hover:underline">
+        <a href="{{ url_for('documents', folder_id=item.id) }}" class="font-medium text-[#1c3461] hover:underline">
           {{ item.name }}
         </a>
         {% else %}
-        <a href="{{ url_for('document_download', did=item.id) }}" class="text-gray-800 hover:text-[#07B0AA] hover:underline">
+        <a href="{{ url_for('document_download', did=item.id) }}" class="text-gray-800 hover:text-[#1c3461] hover:underline">
           {{ item.name }}
         </a>
         {% endif %}
@@ -155,7 +155,7 @@
             class="px-5 py-2.5 rounded-xl text-sm border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
       Ordner erstellen
     </button>
-    <label class="px-5 py-2.5 rounded-xl text-sm bg-[#07B0AA] text-white hover:bg-[#059a94] transition-colors cursor-pointer">
+    <label class="px-5 py-2.5 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors cursor-pointer">
       Datei hochladen
       <input type="file" multiple class="hidden"
              onchange="uploadFiles(this.files)">
@@ -174,7 +174,7 @@
       <input name="name" placeholder="Ordnername" autofocus required
              class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-4">
       <div class="flex gap-3">
-        <button type="submit" class="flex-1 bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">Erstellen</button>
+        <button type="submit" class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Erstellen</button>
         <button type="button" onclick="document.getElementById('new-folder-modal').classList.add('hidden')"
                 class="flex-1 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">Abbrechen</button>
       </div>
@@ -192,7 +192,7 @@
       <input id="rename-input" name="name" placeholder="Neuer Name" required autofocus
              class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-4">
       <div class="flex gap-3">
-        <button type="submit" class="flex-1 bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">Speichern</button>
+        <button type="submit" class="flex-1 bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
         <button type="button" onclick="document.getElementById('rename-modal').classList.add('hidden')"
                 class="flex-1 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">Abbrechen</button>
       </div>

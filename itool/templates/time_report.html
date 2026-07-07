@@ -16,13 +16,13 @@
     {% for p, label in [('today','Heute'),('week','Diese Woche'),('month','Dieser Monat'),('year','Dieses Jahr')] %}
     <a href="{{ url_for('time_report', period=p) }}"
        class="px-4 py-2 rounded-xl text-sm font-medium transition-colors
-         {% if period == p %}bg-[#07B0AA] text-white shadow-sm{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+         {% if period == p %}bg-[#1c3461] text-white shadow-sm{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
       {{ label }}
     </a>
     {% endfor %}
     <a href="{{ url_for('time_report', period='custom', **{'from': date_from, 'to': date_to}) }}"
        class="px-4 py-2 rounded-xl text-sm font-medium transition-colors
-         {% if period == 'custom' %}bg-[#07B0AA] text-white shadow-sm{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+         {% if period == 'custom' %}bg-[#1c3461] text-white shadow-sm{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
       Benutzerdefiniert
     </a>
   </div>
@@ -33,14 +33,14 @@
     <div class="flex items-center gap-2">
       <label class="text-xs text-gray-400">Von</label>
       <input name="from" type="date" value="{{ date_from }}"
-             class="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]">
+             class="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]">
     </div>
     <div class="flex items-center gap-2">
       <label class="text-xs text-gray-400">Bis</label>
       <input name="to" type="date" value="{{ date_to }}"
-             class="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#07B0AA]">
+             class="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]">
     </div>
-    <button type="submit" class="bg-[#07B0AA] text-white px-4 py-1.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+    <button type="submit" class="bg-[#1c3461] text-white px-4 py-1.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
       Anzeigen
     </button>
   </form>
@@ -76,7 +76,7 @@
         <span class="text-sm text-gray-700 truncate flex-1">{{ name }}</span>
         <div class="flex items-center gap-2 shrink-0 ml-3">
           <div class="w-20 bg-gray-100 rounded-full h-1.5">
-            <div class="bg-[#07B0AA] h-1.5 rounded-full" style="width:{{ (mins / total_minutes * 100)|round }}%"></div>
+            <div class="bg-[#1c3461] h-1.5 rounded-full" style="width:{{ (mins / total_minutes * 100)|round }}%"></div>
           </div>
           <span class="text-xs font-semibold text-gray-600 w-16 text-right">{{ fmt_time(mins) }}</span>
         </div>
@@ -95,7 +95,7 @@
       {% for (tid, title), mins in by_ticket %}
       <div class="flex items-center justify-between px-5 py-3">
         <a href="{{ url_for('ticket_detail', tid=tid) }}"
-           class="text-sm text-gray-700 hover:text-[#07B0AA] truncate flex-1">{{ title }}</a>
+           class="text-sm text-gray-700 hover:text-[#1c3461] truncate flex-1">{{ title }}</a>
         <span class="text-xs font-semibold text-gray-600 ml-3 shrink-0">{{ fmt_time(mins) }}</span>
       </div>
       {% endfor %}
@@ -151,7 +151,7 @@
         <td class="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '–' }}</td>
         <td class="px-5 py-3">
           <a href="{{ url_for('ticket_detail', tid=r.ticket_id) }}"
-             class="text-sm font-medium text-gray-700 hover:text-[#07B0AA] truncate block max-w-xs">{{ r.ticket_title }}</a>
+             class="text-sm font-medium text-gray-700 hover:text-[#1c3461] truncate block max-w-xs">{{ r.ticket_title }}</a>
         </td>
         <td class="px-5 py-3 text-sm text-gray-500">{{ r.customer_company or r.customer_name or '–' }}</td>
         <td class="px-5 py-3 text-sm text-gray-500">{{ r.username }}</td>

@@ -16,7 +16,7 @@
         <div class="bg-gray-50 border border-gray-200 rounded-xl max-h-44 overflow-y-auto p-2 space-y-1">
           {% for lead in leads %}
           <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-white rounded-lg cursor-pointer text-sm transition-colors">
-            <input type="checkbox" name="customer_ids" value="{{ lead.id }}" class="rounded border-gray-300 text-[#07B0AA]">
+            <input type="checkbox" name="customer_ids" value="{{ lead.id }}" class="rounded border-gray-300 text-[#1c3461]">
             <span class="font-medium text-gray-700">{{ lead.name }}</span>
             {% if lead.company %}<span class="text-gray-400 text-xs">– {{ lead.company }}</span>{% endif %}
             {% if lead.email %}<span class="text-gray-400 text-xs ml-auto">{{ lead.email }}</span>{% endif %}
@@ -24,7 +24,7 @@
           {% else %}
           <p class="text-gray-400 text-sm text-center py-4">
             Keine Leads vorhanden.<br>
-            <a href="{{ url_for('customer_new') }}" class="text-[#07B0AA] hover:underline font-medium">Neuen Lead anlegen</a>
+            <a href="{{ url_for('customer_new') }}" class="text-[#1c3461] hover:underline font-medium">Neuen Lead anlegen</a>
           </p>
           {% endfor %}
         </div>
@@ -46,7 +46,7 @@
                   class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
       </div>
       <button type="submit"
-              class="w-full bg-[#07B0AA] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#059a94] transition-colors">
+              class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
         Anschreiben speichern
       </button>
     </form>
@@ -63,7 +63,7 @@
           <span class="font-medium text-sm text-gray-800">{{ h.customer_name }}</span>
           <span class="text-xs text-gray-400 shrink-0 ml-2">{{ h.sent_at.strftime('%Y-%m-%d') if h.sent_at else '–' }}</span>
         </div>
-        <div class="text-xs text-[#07B0AA] font-medium mb-1">{{ h.subject }}</div>
+        <div class="text-xs text-[#1c3461] font-medium mb-1">{{ h.subject }}</div>
         <div class="text-xs text-gray-500 line-clamp-2 leading-relaxed">{{ h.body }}</div>
       </div>
       {% endfor %}
