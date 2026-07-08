@@ -26,9 +26,14 @@
   #sidebar.expanded .submenu.open { max-height: 200px; }
 
   /* Team-Feed panel */
-  #team-feed { width: 288px; transition: width 0.2s ease; }
-  #team-feed.wide { width: 440px; }
+  #team-feed { width: 288px; position: relative; transition: opacity 0.15s ease; }
+  #team-feed.resizing { transition: none; }
   .is-hidden { display: none !important; }
+  #feed-resize-handle {
+    position: absolute; top: 0; left: -5px; width: 10px; height: 100%;
+    cursor: col-resize; z-index: 10;
+  }
+  #feed-resize-handle:hover, #feed-resize-handle.active { background: rgba(28,52,97,0.15); }
 
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -83,7 +88,6 @@
         <a href="{{ url_for('customers') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Kunden</a>
         <a href="{{ url_for('customers', status='customer') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Aktive Kunden</a>
         <a href="{{ url_for('customers', status='lead') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Leads</a>
-        <a href="{{ url_for('customer_new') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">+ Neuer Kunde</a>
       </div>
     </div>
 
@@ -103,7 +107,6 @@
       </button>
       <div id="menu-inv" class="submenu pl-8 mt-1 space-y-0.5 {% if 'invoice' in (request.endpoint or '') or 'recurring' in (request.endpoint or '') %}open{% endif %}">
         <a href="{{ url_for('invoices') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Rechnungen</a>
-        <a href="{{ url_for('invoice_new') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">+ Neue Rechnung</a>
         <a href="{{ url_for('recurring_list') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Abo-Rechnungen</a>
       </div>
     </div>
@@ -126,7 +129,6 @@
         <a href="{{ url_for('tickets') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Tickets</a>
         <a href="{{ url_for('tickets', status='open') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Offen</a>
         <a href="{{ url_for('tickets', status='in_progress') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">In Arbeit</a>
-        <a href="{{ url_for('ticket_new') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">+ Neues Ticket</a>
       </div>
     </div>
 
@@ -248,16 +250,12 @@
 
       <!-- Right team feed -->
       <aside id="team-feed" class="shrink-0 border-l border-gray-300/50 flex flex-col bg-white/10">
+        <div id="feed-resize-handle" title="Breite anpassen"></div>
         <div class="px-4 py-3 border-b border-gray-300/40 flex items-center gap-2">
           <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
           </svg>
           <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">Team-Feed</span>
-          <button type="button" onclick="toggleFeedWidth()" title="Größe ändern" class="text-gray-400 hover:text-gray-700 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4H4v4m0 8v4h4m8-16h4v4m0 8v4h-4"/>
-            </svg>
-          </button>
           <button type="button" onclick="closeFeed()" title="Team-Feed schließen" class="text-gray-400 hover:text-gray-700 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -344,14 +342,45 @@ function openFeed() {
   feedReopenBtn.classList.add('is-hidden');
   localStorage.setItem('feedClosed', 'false');
 }
-function toggleFeedWidth() {
-  teamFeed.classList.toggle('wide');
-  localStorage.setItem('feedWide', teamFeed.classList.contains('wide'));
-}
 if (teamFeed) {
   if (localStorage.getItem('feedClosed') === 'true') closeFeed();
-  if (localStorage.getItem('feedWide') === 'true') teamFeed.classList.add('wide');
+  const savedFeedWidth = localStorage.getItem('feedWidth');
+  if (savedFeedWidth) teamFeed.style.width = savedFeedWidth + 'px';
 }
+
+// Resize team-feed by dragging its left edge
+(function() {
+  const panel  = document.getElementById('team-feed');
+  const handle = document.getElementById('feed-resize-handle');
+  if (!panel || !handle) return;
+  const MIN_W = 260, MAX_W = 800;
+  let startX = 0, startWidth = 0, dragging = false;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    panel.classList.add('resizing');
+    handle.classList.add('active');
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const delta = startX - e.clientX;
+    let newWidth = startWidth + delta;
+    newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
+    panel.style.width = newWidth + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('resizing');
+    handle.classList.remove('active');
+    document.body.style.userSelect = '';
+    localStorage.setItem('feedWidth', Math.round(panel.getBoundingClientRect().width));
+  });
+})();
 
 // Feed
 const CURRENT_USER_ID = {{ session.user_id|default(0) }};
