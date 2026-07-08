@@ -26,6 +26,13 @@
     <button class="px-4 py-2 rounded-xl text-sm bg-green-100 text-green-700 hover:bg-green-200 transition-colors font-medium">Als bezahlt markieren</button>
   </form>
   {% endif %}
+  {% if invoice.status in ('sent', 'paid') and session.get('role') == 'admin' %}
+  <form method="POST" action="{{ url_for('invoice_cancel', iid=invoice.id) }}"
+        onsubmit="return confirm('Rechnung {{ invoice.number }} wirklich stornieren? Nummer und Datensatz bleiben zu Dokumentationszwecken erhalten.')">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="px-4 py-2 rounded-xl text-sm bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-medium">Stornieren</button>
+  </form>
+  {% endif %}
   <button onclick="window.print()"
           class="px-4 py-2 rounded-xl text-sm bg-gray-700 text-white hover:bg-gray-800 transition-colors flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
@@ -66,8 +73,9 @@
       <span class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold
         {% if invoice.status=='paid' %}bg-green-100 text-green-700
         {% elif invoice.status=='sent' %}bg-blue-100 text-blue-700
+        {% elif invoice.status=='cancelled' %}bg-red-100 text-red-600
         {% else %}bg-gray-100 text-gray-500{% endif %}">
-        {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt'}[invoice.status] }}
+        {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt','cancelled':'Storniert'}.get(invoice.status, invoice.status) }}
       </span>
     </div>
   </div>

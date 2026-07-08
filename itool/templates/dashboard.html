@@ -208,7 +208,7 @@
             {% if inv.status=='paid' %}bg-green-50 text-green-600
             {% elif inv.status=='sent' %}bg-blue-50 text-blue-600
             {% else %}bg-gray-100 text-gray-400{% endif %}">
-            {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt'}.get(inv.status, inv.status) }}
+            {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt','cancelled':'Storniert'}.get(inv.status, inv.status) }}
           </span>
         </div>
       </a>

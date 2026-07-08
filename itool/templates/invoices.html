@@ -40,16 +40,18 @@
           {% if inv.status=='paid'  %}bg-green-100 text-green-700
           {% elif inv.status=='sent'%}bg-blue-100 text-blue-700
           {% else %}bg-gray-100 text-gray-500{% endif %}">
-          {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt'}[inv.status] }}
+          {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt','cancelled':'Storniert'}.get(inv.status, inv.status) }}
         </span>
       </td>
       <td class="px-5 py-3 text-right">
         <div class="flex items-center justify-end gap-3">
           <a href="{{ url_for('invoice_view', iid=inv.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Ansehen</a>
+          {% if inv.status == 'draft' %}
           <form method="POST" action="{{ url_for('invoice_delete', iid=inv.id) }}" onsubmit="return confirm('Rechnung löschen?')">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
           </form>
+          {% endif %}
         </div>
       </td>
     </tr>

@@ -847,15 +847,51 @@ def invoice_send_email(iid):
     return redirect(url_for("invoice_view", iid=iid))
 
 
+#  Sobald eine Rechnung tatsaechlich versendet oder bezahlt wurde, gilt sie als
+#  ausgestellt und darf laut GoBD nicht mehr geloescht oder "rueckgaengig" auf
+#  Entwurf gesetzt werden (fortlaufende, lueckenlose Rechnungsnummerierung).
+#  Stattdessen gibt es "Stornieren": Nummer und Datensatz bleiben erhalten,
+#  die Rechnung wird nur als ungueltig markiert.
+_ISSUED_STATUSES = ("sent", "paid")
+
 @app.route("/invoices/<int:iid>/status/<status>", methods=["POST"])
 @login_required
 def invoice_status(iid, status):
     db = get_db()
+    current = db.execute("SELECT status FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not current:
+        db.close()
+        abort(404)
+
+    if current["status"] in _ISSUED_STATUSES and status == "draft":
+        flash("Bereits versendete/bezahlte Rechnungen koennen nicht mehr auf Entwurf zurueckgesetzt werden.", "error")
+        db.close()
+        return redirect(url_for("invoice_view", iid=iid))
+
     db.execute("UPDATE invoices SET status=%s WHERE id=%s", (status, iid))
-    if status in ("sent", "paid"):
+    if status in _ISSUED_STATUSES:
         _calc_commission_for_invoice(db, iid)
     db.commit()
     db.close()
+    return redirect(url_for("invoice_view", iid=iid))
+
+
+@app.route("/invoices/<int:iid>/cancel", methods=["POST"])
+@admin_required
+def invoice_cancel(iid):
+    db = get_db()
+    invoice = db.execute("SELECT status FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not invoice:
+        db.close()
+        abort(404)
+    if invoice["status"] not in _ISSUED_STATUSES:
+        db.close()
+        flash("Nur versendete/bezahlte Rechnungen koennen storniert werden.", "error")
+        return redirect(url_for("invoice_view", iid=iid))
+    db.execute("UPDATE invoices SET status='cancelled' WHERE id=%s", (iid,))
+    db.commit()
+    db.close()
+    flash("Rechnung storniert. Nummer und Datensatz bleiben zu Dokumentationszwecken erhalten.", "success")
     return redirect(url_for("invoice_view", iid=iid))
 
 
@@ -863,6 +899,15 @@ def invoice_status(iid, status):
 @login_required
 def invoice_delete(iid):
     db = get_db()
+    invoice = db.execute("SELECT status, number FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not invoice:
+        db.close()
+        abort(404)
+    if invoice["status"] in _ISSUED_STATUSES:
+        db.close()
+        flash(f"Rechnung {invoice['number']} wurde bereits versendet/bezahlt und darf laut GoBD nicht "
+              f"geloescht werden. Nutze stattdessen 'Stornieren'.", "error")
+        return redirect(url_for("invoices"))
     db.execute("DELETE FROM invoices WHERE id=%s", (iid,))
     db.commit()
     db.close()
