@@ -175,7 +175,6 @@
       </button>
       <div id="menu-buch" class="submenu pl-8 mt-1 space-y-0.5 {% if 'accounting' in (request.endpoint or '') or 'time_report' in (request.endpoint or '') %}open{% endif %}">
         <a href="{{ url_for('accounting') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Übersicht</a>
-        <a href="{{ url_for('accounting_import') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Dokumente Import</a>
         <a href="{{ url_for('time_report') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Zeitauswertung</a>
       </div>
     </div>

@@ -230,25 +230,6 @@ def init_db():
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
-        """CREATE TABLE IF NOT EXISTS imported_invoices (
-            id SERIAL PRIMARY KEY,
-            doc_type TEXT NOT NULL DEFAULT 'expense',
-            file_path TEXT NOT NULL,
-            original_filename TEXT,
-            mime_type TEXT,
-            vendor TEXT,
-            invoice_number TEXT,
-            doc_date TEXT,
-            amount_gross REAL,
-            tax_rate REAL DEFAULT 19,
-            year INTEGER,
-            month INTEGER,
-            status TEXT NOT NULL DEFAULT 'processed',
-            raw_text TEXT,
-            expense_id INTEGER REFERENCES expenses(id) ON DELETE SET NULL,
-            uploaded_by TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )""",
         """CREATE TABLE IF NOT EXISTS recurring_invoices (
             id SERIAL PRIMARY KEY,
             customer_id INTEGER NOT NULL REFERENCES customers(id),
