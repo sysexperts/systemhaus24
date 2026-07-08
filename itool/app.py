@@ -78,6 +78,17 @@ def _csrf_valid():
 app.jinja_env.globals["csrf_token"] = _csrf_token
 
 
+@app.template_filter("fmtdt")
+def fmtdt(value, fmt="%Y-%m-%d %H:%M"):
+    """Safely format a timestamp coming from the DB, whether psycopg2 hands us
+    a datetime object (the normal case) or a plain string."""
+    if not value:
+        return "–"
+    if hasattr(value, "strftime"):
+        return value.strftime(fmt)
+    return str(value)[:16].replace("T", " ")
+
+
 def log_activity(db, action, entity_type, entity_id=None, entity_label=None, details=None):
     """Record who changed what, for the activity/audit log. Fails silently if
     the audit table isn't there yet (e.g. during first-ever request)."""

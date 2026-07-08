@@ -89,7 +89,7 @@
                 {{ {'note':'Notiz','call':'Anruf','email':'E-Mail','meeting':'Meeting','stage':'Statusänderung','converted':'Konvertiert'}.get(act.type, act.type) }}
                 {% if act.created_by %} · {{ act.created_by }}{% endif %}
               </span>
-              <span class="text-xs text-gray-300 shrink-0">{{ act.created_at[:16].replace('T',' ') }}</span>
+              <span class="text-xs text-gray-300 shrink-0">{{ act.created_at | fmtdt }}</span>
             </div>
             <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ act.body }}</p>
           </div>
