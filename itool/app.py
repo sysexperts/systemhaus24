@@ -571,7 +571,7 @@ def customer_new():
     db = get_db()
     if request.method == "POST":
         fields = _customer_fields(request.form)
-        db.execute("""INSERT INTO customers
+        new_id = db.execute("""INSERT INTO customers
             (customer_number,company,legal_form,name,email,phone,website,
              street,zip,city,country,tax_id,payment_terms,
              contact_person,contact_position,contact_email,contact_phone,contact_mobile,
