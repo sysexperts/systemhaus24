@@ -1449,7 +1449,7 @@ def _build_document_arcnames(db):
 @app.route("/backup")
 @admin_required
 def backup():
-    import zipfile, io
+    import zipfile, io, subprocess
     data_dir = os.path.join(os.path.dirname(__file__), "data")
     doc_store_dir = os.path.join(data_dir, "documents")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1461,6 +1461,25 @@ def backup():
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Live database dump (Postgres) — this is the actual business data
+        # and previously was NOT part of the backup at all.
+        pg_env = dict(os.environ, PGPASSWORD=os.environ.get("DB_PASSWORD", ""))
+        try:
+            dump = subprocess.run(
+                ["pg_dump", "-h", os.environ.get("DB_HOST", "db"),
+                 "-p", os.environ.get("DB_PORT", "5432"),
+                 "-U", os.environ.get("DB_USER", "itool"),
+                 "-d", os.environ.get("DB_NAME", "itool"),
+                 "--no-owner", "--no-privileges"],
+                env=pg_env, capture_output=True, timeout=120, check=True,
+            )
+            zf.writestr(f"datenbank/itool_{ts}.sql", dump.stdout)
+        except Exception as e:
+            zf.writestr("datenbank/FEHLER.txt",
+                        f"Datenbank-Dump fehlgeschlagen: {e}\n"
+                        f"Die Dateien in diesem Backup sind trotzdem vollstaendig, "
+                        f"aber OHNE Datenbankinhalte (Kunden, Rechnungen, Tickets ...).")
+
         # Dokumente: reconstructed folder structure with original filenames
         for doc_id, arcname in doc_arcnames.items():
             row = doc_rows.get(doc_id)
@@ -1470,13 +1489,13 @@ def backup():
             if os.path.exists(full):
                 zf.write(full, arcname)
 
-        # Everything else (database, uploads, accounting imports, ...) unchanged
+        # Everything else (uploads, accounting imports, ...) unchanged
         for root, dirs, files in os.walk(data_dir):
             if os.path.commonpath([root, doc_store_dir]) == doc_store_dir:
                 continue  # already handled above with proper names/paths
             for fname in files:
-                if fname.endswith(".db") and fname != "itool.db":
-                    continue  # alte backup_.db überspringen
+                if fname.endswith(".db"):
+                    continue  # veraltete sqlite-Reste, falls noch vorhanden
                 full = os.path.join(root, fname)
                 arcname = os.path.relpath(full, os.path.dirname(data_dir))
                 zf.write(full, arcname)
