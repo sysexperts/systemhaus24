@@ -484,11 +484,31 @@ def dashboard():
         WHERE r.status = 'active' AND r.next_date::date <= CURRENT_DATE + INTERVAL '14 days'
         ORDER BY r.next_date ASC LIMIT 5
     """).fetchall()
+
+    revenue_month_prev = db.execute("""
+        SELECT COALESCE(SUM(ii.quantity * ii.unit_price),0)
+        FROM invoices i JOIN invoice_items ii ON ii.invoice_id = i.id
+        WHERE i.status IN ('sent','paid')
+          AND TO_CHAR(i.date::date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
+    """).fetchone()[0]
+
+    top_customers = db.execute("""
+        SELECT c.name, c.company, SUM(ii.quantity*ii.unit_price) as total
+        FROM invoices i
+        JOIN invoice_items ii ON ii.invoice_id=i.id
+        JOIN customers c ON c.id=i.customer_id
+        WHERE i.status IN ('sent','paid')
+        GROUP BY c.id ORDER BY total DESC LIMIT 5
+    """).fetchall()
+    top_customers_max = max([c["total"] for c in top_customers], default=0)
+
     db.close()
     return render_template("dashboard.html", stats=stats,
                            recent_tickets=recent_tickets, recent_invoices=recent_invoices,
                            overdue_invoices=overdue_invoices, revenue_months=all_months,
                            upcoming_recurring=upcoming_recurring,
+                           revenue_month_prev=revenue_month_prev,
+                           top_customers=top_customers, top_customers_max=top_customers_max,
                            current_year=current_year, now_hour=datetime.now().hour)
 
 
