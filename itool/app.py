@@ -1324,6 +1324,21 @@ def document_download(did):
                                download_name=secure_filename(doc["name"] or safe_fp))
 
 
+@app.route("/documents/<int:did>/view")
+@login_required
+def document_view(did):
+    db = get_db()
+    doc = db.execute("SELECT * FROM documents WHERE id=%s AND type='file'", (did,)).fetchone()
+    db.close()
+    if not doc:
+        abort(404)
+    safe_fp = os.path.basename(doc["file_path"])
+    if not safe_fp:
+        abort(400)
+    return send_from_directory(DOC_STORE, safe_fp, as_attachment=False,
+                               mimetype=doc["mime_type"] or "application/octet-stream")
+
+
 @app.route("/documents/<int:did>/rename", methods=["POST"])
 @login_required
 def document_rename(did):
