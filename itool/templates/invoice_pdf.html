@@ -108,17 +108,17 @@
 <!-- Amount-due callout (most prominent element, per invoicing best practice) -->
 <table class="callout-table">
   <tr>
-    <td style="width:33%">
+    <td style="width:170pt">
       <div class="callout-label">Gesamtbetrag</div>
       <div class="callout-value">{{ '%.2f'|format(grand_total) }} €</div>
     </td>
-    <td class="callout-divider"></td>
-    <td style="width:33%">
+    <td class="callout-divider" style="width:1pt; padding:0;"></td>
+    <td style="width:145pt">
       <div class="callout-label">Rechnungsdatum</div>
       <div class="callout-value due">{{ invoice.date }}</div>
     </td>
-    <td class="callout-divider"></td>
-    <td style="width:33%">
+    <td class="callout-divider" style="width:1pt; padding:0;"></td>
+    <td style="width:145pt">
       <div class="callout-label">Fällig bis</div>
       <div class="callout-value due">{{ invoice.due_date or '–' }}</div>
     </td>
