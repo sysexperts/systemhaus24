@@ -2,7 +2,13 @@
 {% block title %}Dokumente – tkToolkit{% endblock %}
 {% block content %}
 <style>
-  #doc-preview { width: 420px; transition: opacity 0.15s ease; position: relative; }
+  #doc-preview {
+    width: 420px;
+    position: fixed;
+    top: 24px; right: 24px; bottom: 24px;
+    transition: opacity 0.15s ease;
+    z-index: 30;
+  }
   #doc-preview.doc-preview-resizing { transition: none; }
   #doc-preview.doc-preview-collapsed { width: 0 !important; opacity: 0; pointer-events: none; }
   #doc-main { transition: margin-right 0.2s ease; }
@@ -181,7 +187,7 @@
 </div><!-- /doc-main -->
 
 <!-- Preview panel -->
-<aside id="doc-preview" class="doc-preview-collapsed shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col sticky top-6" style="height: calc(100vh - 140px);">
+<aside id="doc-preview" class="doc-preview-collapsed shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
   <div id="doc-preview-resize-handle" title="Breite anpassen"></div>
   <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
     <span id="doc-preview-name" class="text-sm font-medium text-gray-700 truncate pr-2">Vorschau</span>
@@ -308,6 +314,7 @@ function openDocPreview(id, name) {
   panel.classList.remove('doc-preview-collapsed');
   const savedWidth = localStorage.getItem('docPreviewWidth');
   if (savedWidth) panel.style.width = savedWidth + 'px';
+  updateDocMainMargin();
   label.textContent = name;
   dlBtn.href = '/documents/' + id + '/download';
 
@@ -331,6 +338,16 @@ function openDocPreview(id, name) {
 function closeDocPreview() {
   document.getElementById('doc-preview').classList.add('doc-preview-collapsed');
   document.getElementById('doc-preview-body').innerHTML = '<p class="text-sm text-gray-300">Datei auswählen…</p>';
+  document.getElementById('doc-main').style.marginRight = '';
+}
+function updateDocMainMargin() {
+  const panel = document.getElementById('doc-preview');
+  const main  = document.getElementById('doc-main');
+  if (panel.classList.contains('doc-preview-collapsed')) {
+    main.style.marginRight = '';
+  } else {
+    main.style.marginRight = (panel.getBoundingClientRect().width + 24) + 'px';
+  }
 }
 
 // Resize preview panel by dragging the left edge
@@ -355,6 +372,7 @@ function closeDocPreview() {
     let newWidth = startWidth + delta;
     newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
     panel.style.width = newWidth + 'px';
+    updateDocMainMargin();
   });
   window.addEventListener('mouseup', () => {
     if (!dragging) return;
