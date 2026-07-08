@@ -2232,15 +2232,14 @@ _GERMAN_MONTHS = {
     "januar": 1, "februar": 2, "märz": 3, "maerz": 3, "april": 4, "mai": 5, "juni": 6,
     "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
 }
-# (regex, group_order) where group_order is 'dmy' or 'ymd'; year may be 2 or 4 digits
 _DATE_PATTERNS = [
-    (_re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2}|\d{4})\b"), "dmy"),
-    (_re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"), "ymd"),
+    _re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b"),
+    _re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"),
 ]
 _DATE_NAMED_MONTH_RE = _re.compile(
-    r"\b(\d{1,2})\.?\s*(Januar|Februar|Ma[eä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s*(\d{2,4})\b",
+    r"\b(\d{1,2})\.?\s*(Januar|Februar|Ma[eä]rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s*(\d{4})\b",
     _re.I)
-_DATE_CONTEXT_RE = _re.compile(r"(rechnungsdatum|ausstellungsdatum|leistungsdatum|datum|invoice date|date)", _re.I)
+_DATE_CONTEXT_RE = _re.compile(r"(rechnungsdatum|datum|invoice date|date)", _re.I)
 _AMOUNT_CONTEXT_RE = _re.compile(r"(gesamtbetrag|gesamtsumme|rechnungsbetrag|total|summe|zu zahlen|endbetrag)", _re.I)
 _AMOUNT_RE = _re.compile(r"(\d{1,3}(?:[.\s]\d{3})*,\d{2}|\d+\.\d{2})\s*(?:€|eur)?")
 _INVOICE_NO_RE = _re.compile(r"(rechnungs(?:-|\s)?nr\.?|rechnungsnummer|invoice\s?(?:no|nr)\.?)\s*[:#]?\s*([A-Za-z0-9\-\/]+)", _re.I)
@@ -2262,8 +2261,6 @@ def _parse_named_month_match(m):
         month_name = m.group(2).lower().replace("ä", "ae")
         month = _GERMAN_MONTHS.get(month_name)
         year = int(m.group(3))
-        if year < 100:
-            year += 2000
         if month:
             return date(year, month, day)
     except Exception:
@@ -2271,36 +2268,37 @@ def _parse_named_month_match(m):
     return None
 
 
-def _find_date_in_text(text):
-    """Try named-month dates first, then numeric dd.mm.yy(yy) / yyyy-mm-dd."""
+def _extract_invoice_date(text):
+    lines = text.splitlines()
+    # Prefer a date on a line that mentions "Datum" etc.
+    for line in lines:
+        if _DATE_CONTEXT_RE.search(line):
+            m = _DATE_NAMED_MONTH_RE.search(line)
+            if m:
+                d = _parse_named_month_match(m)
+                if d:
+                    return d
+            for pat in _DATE_PATTERNS:
+                m = pat.search(line)
+                if m:
+                    g = m.groups()
+                    d = _parse_date_token(g[0], g[1], g[2]) if len(g[2]) == 4 else _parse_date_token(g[2], g[1], g[0])
+                    if d:
+                        return d
+    # Fallback: first plausible date anywhere in the document
     m = _DATE_NAMED_MONTH_RE.search(text)
     if m:
         d = _parse_named_month_match(m)
         if d:
             return d
-    for pat, order in _DATE_PATTERNS:
+    for pat in _DATE_PATTERNS:
         m = pat.search(text)
         if m:
             g = m.groups()
-            d = _parse_date_token(g[0], g[1], g[2]) if order == "dmy" else _parse_date_token(g[2], g[1], g[0])
+            d = _parse_date_token(g[0], g[1], g[2]) if len(g[2]) == 4 else _parse_date_token(g[2], g[1], g[0])
             if d:
                 return d
     return None
-
-
-def _extract_invoice_date(text):
-    lines = text.splitlines()
-    # Prefer a date near a line that mentions "Datum" etc. Labels and values are
-    # often split across separate lines in extracted PDF column layouts, so also
-    # check the next couple of lines after the label.
-    for i, line in enumerate(lines):
-        if _DATE_CONTEXT_RE.search(line):
-            window = "\n".join(lines[i:i + 3])
-            d = _find_date_in_text(window)
-            if d:
-                return d
-    # Fallback: first plausible date anywhere in the document
-    return _find_date_in_text(text)
 
 
 def _amount_to_float(s):
