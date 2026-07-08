@@ -2,9 +2,15 @@
 {% block title %}Dokumente – tkToolkit{% endblock %}
 {% block content %}
 <style>
-  #doc-preview { width: 420px; transition: width 0.2s ease, opacity 0.15s ease; }
-  #doc-preview.doc-preview-collapsed { width: 0; opacity: 0; pointer-events: none; }
+  #doc-preview { width: 420px; transition: opacity 0.15s ease; position: relative; }
+  #doc-preview.doc-preview-resizing { transition: none; }
+  #doc-preview.doc-preview-collapsed { width: 0 !important; opacity: 0; pointer-events: none; }
   #doc-main { transition: margin-right 0.2s ease; }
+  #doc-preview-resize-handle {
+    position: absolute; top: 0; left: -5px; width: 10px; height: 100%;
+    cursor: col-resize; z-index: 10;
+  }
+  #doc-preview-resize-handle:hover, #doc-preview-resize-handle.active { background: rgba(28,52,97,0.15); }
 </style>
 
 <div class="flex gap-5 items-start">
@@ -176,6 +182,7 @@
 
 <!-- Preview panel -->
 <aside id="doc-preview" class="doc-preview-collapsed shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col sticky top-6" style="height: calc(100vh - 140px);">
+  <div id="doc-preview-resize-handle" title="Breite anpassen"></div>
   <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
     <span id="doc-preview-name" class="text-sm font-medium text-gray-700 truncate pr-2">Vorschau</span>
     <div class="flex items-center gap-1 shrink-0">
@@ -299,6 +306,8 @@ function openDocPreview(id, name) {
   const dlBtn = document.getElementById('doc-preview-download');
 
   panel.classList.remove('doc-preview-collapsed');
+  const savedWidth = localStorage.getItem('docPreviewWidth');
+  if (savedWidth) panel.style.width = savedWidth + 'px';
   label.textContent = name;
   dlBtn.href = '/documents/' + id + '/download';
 
@@ -323,5 +332,38 @@ function closeDocPreview() {
   document.getElementById('doc-preview').classList.add('doc-preview-collapsed');
   document.getElementById('doc-preview-body').innerHTML = '<p class="text-sm text-gray-300">Datei auswählen…</p>';
 }
+
+// Resize preview panel by dragging the left edge
+(function() {
+  const panel  = document.getElementById('doc-preview');
+  const handle = document.getElementById('doc-preview-resize-handle');
+  const MIN_W = 320, MAX_W = 1200;
+  let startX = 0, startWidth = 0, dragging = false;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    panel.classList.add('doc-preview-resizing');
+    handle.classList.add('active');
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const delta = startX - e.clientX; // dragging left edge left = wider
+    let newWidth = startWidth + delta;
+    newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
+    panel.style.width = newWidth + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('doc-preview-resizing');
+    handle.classList.remove('active');
+    document.body.style.userSelect = '';
+    localStorage.setItem('docPreviewWidth', Math.round(panel.getBoundingClientRect().width));
+  });
+})();
 </script>
 {% endblock %}
