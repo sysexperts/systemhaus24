@@ -350,6 +350,21 @@ function updateDocMainMargin() {
   }
 }
 
+// Keep the preview panel flush against the team-feed sidebar (if open) instead
+// of the raw viewport edge, so the two right-hand panels never overlap.
+function syncDocPreviewPosition() {
+  const panel = document.getElementById('doc-preview');
+  const feed  = document.getElementById('team-feed');
+  let rightOffset = 24;
+  if (feed && !feed.classList.contains('is-hidden')) {
+    rightOffset = feed.getBoundingClientRect().width + 24;
+  }
+  panel.style.right = rightOffset + 'px';
+}
+syncDocPreviewPosition();
+window.addEventListener('resize', syncDocPreviewPosition);
+setInterval(syncDocPreviewPosition, 250);
+
 // Resize preview panel by dragging the left edge
 (function() {
   const panel  = document.getElementById('doc-preview');
