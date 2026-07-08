@@ -12,7 +12,7 @@
 
 <!-- Tabs -->
 <div class="flex gap-1 mb-5 bg-white/60 rounded-2xl p-1.5 w-fit shadow-sm border border-white">
-  {% for tid, tlabel in [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang')] %}
+  {% for tid, tlabel in [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('layout','Layout'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang')] %}
   <button onclick="switchTab('{{ tid }}')" id="tab-{{ tid }}"
           class="tab-btn px-4 py-2 rounded-xl text-sm font-medium transition-colors text-gray-500 hover:text-gray-700">
     {{ tlabel }}
@@ -260,6 +260,62 @@
       Firmendaten speichern
     </button>
   </form>
+</div>
+
+<!-- ══════════════ TAB: Layout ══════════════ -->
+<div id="pane-layout" class="tab-pane hidden space-y-5">
+
+  <div class="grid grid-cols-2 gap-5">
+
+    <!-- Akzentfarbe -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-1">Akzentfarbe</p>
+      <p class="text-xs text-gray-400 mb-4">Wird für Buttons, aktive Menüpunkte, Links und die Sidebar verwendet.</p>
+      <form method="POST" action="{{ url_for('settings') }}#layout" class="flex items-center gap-3">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="_tab" value="layout">
+        <input type="hidden" name="chat_position" value="{{ cfg.get('chat_position','left') }}" id="chat-position-hidden">
+        <input type="color" name="accent_color" id="accent-color-picker"
+               value="{{ cfg.get('accent_color','#1c3461') }}"
+               class="w-14 h-14 rounded-xl border border-gray-200 cursor-pointer p-1 bg-white"
+               oninput="document.getElementById('accent-color-text').value = this.value">
+        <input type="text" id="accent-color-text" value="{{ cfg.get('accent_color','#1c3461') }}"
+               class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+               oninput="document.getElementById('accent-color-picker').value = this.value"
+               onchange="document.getElementById('accent-color-picker').value = this.value">
+        <button type="submit" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors whitespace-nowrap">
+          Speichern
+        </button>
+      </form>
+    </div>
+
+    <!-- Chat-Position -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-1">Team-Feed Position</p>
+      <p class="text-xs text-gray-400 mb-4">Wo der Chat auf dem Bildschirm angedockt wird.</p>
+      <form method="POST" action="{{ url_for('settings') }}#layout" class="flex items-center gap-3">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="_tab" value="layout">
+        <input type="hidden" name="accent_color" value="{{ cfg.get('accent_color','#1c3461') }}">
+        <div class="flex-1 grid grid-cols-2 gap-2">
+          <label class="flex items-center justify-center gap-2 cursor-pointer p-3 rounded-xl border-2 transition-colors
+                        {% if cfg.get('chat_position','left')=='left' %}border-blue-400 bg-blue-50{% else %}border-gray-200 hover:border-gray-300{% endif %}">
+            <input type="radio" name="chat_position" value="left" class="hidden"
+                   {% if cfg.get('chat_position','left')=='left' %}checked{% endif %}
+                   onchange="this.closest('form').submit()">
+            <span class="text-sm font-medium text-gray-700">← Links</span>
+          </label>
+          <label class="flex items-center justify-center gap-2 cursor-pointer p-3 rounded-xl border-2 transition-colors
+                        {% if cfg.get('chat_position')=='right' %}border-blue-400 bg-blue-50{% else %}border-gray-200 hover:border-gray-300{% endif %}">
+            <input type="radio" name="chat_position" value="right" class="hidden"
+                   {% if cfg.get('chat_position')=='right' %}checked{% endif %}
+                   onchange="this.closest('form').submit()">
+            <span class="text-sm font-medium text-gray-700">Rechts →</span>
+          </label>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Logo uploads (one form, two fields) -->
   <form method="POST" action="{{ url_for('settings_logo') }}" enctype="multipart/form-data">
@@ -464,7 +520,7 @@
 </div>
 
 <script>
-const TABS = ['allgemein','firma','smtp','imap'];
+const TABS = ['allgemein','firma','layout','smtp','imap'];
 
 function switchTab(id) {
   TABS.forEach(t => {

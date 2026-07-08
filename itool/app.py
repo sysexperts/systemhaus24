@@ -1751,6 +1751,9 @@ SETTING_KEYS_BY_TAB = {
         "company_phone", "company_email", "company_website", "company_tax_id",
         "company_iban", "company_bic", "company_bank", "company_kleingewerbe",
     ],
+    "layout": [
+        "accent_color", "chat_position",
+    ],
     "smtp": [
         "smtp_host", "smtp_port", "smtp_user", "smtp_pass",
         "smtp_from_name", "smtp_from_email", "error_notify_email",
@@ -1760,6 +1763,30 @@ SETTING_KEYS_BY_TAB = {
         "imap_enabled", "imap_folder", "imap_auto_ticket",
     ],
 }
+
+
+def _shade_hex(hex_color, factor=0.82):
+    """Shade a #rrggbb color: factor<1 darkens, factor>1 lightens toward white."""
+    try:
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        if factor <= 1:
+            r, g, b = r * factor, g * factor, b * factor
+        else:
+            t = factor - 1
+            r, g, b = r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t
+        r, g, b = (max(0, min(255, int(v))) for v in (r, g, b))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hex_color
+
+
+def _darken_hex(hex_color, factor=0.82):
+    return _shade_hex(hex_color, factor)
+
+
+app.jinja_env.globals["darken_hex"] = _darken_hex
+app.jinja_env.globals["shade_hex"] = _shade_hex
 
 
 @app.route("/settings", methods=["GET", "POST"])

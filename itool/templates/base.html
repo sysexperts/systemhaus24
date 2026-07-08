@@ -7,6 +7,24 @@
 <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
+  :root {
+    --accent: {{ app_cfg.get('accent_color','#1c3461') }};
+    --accent-hover: {{ darken_hex(app_cfg.get('accent_color','#1c3461')) }};
+  }
+  /* Dynamic accent color: overrides the app's originally-hardcoded navy classes */
+  [class*="bg-[#1c3461]"] { background-color: var(--accent) !important; }
+  [class*="text-[#1c3461]"] { color: var(--accent) !important; }
+  [class*="border-[#1c3461]"] { border-color: var(--accent) !important; }
+  [class*="from-[#1c3461]"] { --tw-gradient-from: var(--accent) !important; }
+  [class*="ring-[#1c3461]"]:focus { --tw-ring-color: var(--accent) !important; }
+  [class*="hover:bg-[#2a4a8a]"]:hover { background-color: var(--accent-hover) !important; }
+  [class*="hover:text-[#1c3461]"]:hover { color: var(--accent) !important; }
+  [class*="hover:border-[#1c3461]"]:hover { border-color: var(--accent) !important; }
+  [class*="to-[#2a4a8a]"] { --tw-gradient-to: var(--accent-hover) !important; }
+  .group:hover [class*="group-hover:text-[#1c3461]"] { color: var(--accent) !important; }
+  .peer:checked ~ [class*="peer-checked:bg-[#1c3461]"] { background-color: var(--accent) !important; }
+  .peer:checked ~ [class*="peer-checked:border-[#1c3461]"] { border-color: var(--accent) !important; }
+
   body { background-color: #dde4ea; }
 
   /* Sidebar */
@@ -30,9 +48,11 @@
   #team-feed.resizing { transition: none; }
   .is-hidden { display: none !important; }
   #feed-resize-handle {
-    position: absolute; top: 0; right: -5px; width: 10px; height: 100%;
+    position: absolute; top: 0; width: 10px; height: 100%;
     cursor: col-resize; z-index: 10;
   }
+  #feed-resize-handle.side-right { right: -5px; }
+  #feed-resize-handle.side-left { left: -5px; }
   #feed-resize-handle:hover, #feed-resize-handle.active { background: rgba(28,52,97,0.15); }
 
   ::-webkit-scrollbar { width: 5px; }
@@ -45,7 +65,9 @@
 {% if session.user_id %}
 
   <!-- Sidebar -->
-  <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20" style="background: linear-gradient(160deg, #2e5090 0%, #1c3461 60%, #162a50 100%)">
+  {% set accent = app_cfg.get('accent_color','#1c3461') %}
+  <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20"
+         style="background: linear-gradient(160deg, {{ shade_hex(accent, 1.3) }} 0%, {{ accent }} 60%, {{ shade_hex(accent, 0.55) }} 100%)">
 
     <!-- Logo (immer zentriert, immer sichtbar) -->
     <div class="flex items-center justify-center px-1 mb-2" style="min-height:64px">
@@ -237,48 +259,9 @@
 
 
     <!-- Feed + Content -->
+    {% set chat_pos = app_cfg.get('chat_position','left') %}
     <div class="flex flex-1 overflow-hidden">
-      <!-- Left team feed -->
-      <aside id="team-feed" class="shrink-0 border-r border-gray-300/50 flex flex-col bg-white/10">
-        <div id="feed-resize-handle" title="Breite anpassen"></div>
-        <div class="px-4 py-3 border-b border-gray-300/40 flex items-center gap-2">
-          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
-          </svg>
-          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide flex-1">Team-Feed</span>
-          <button type="button" onclick="closeFeed()" title="Team-Feed schließen" class="text-gray-400 hover:text-gray-700 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Messages -->
-        <div id="feed-items" class="flex-1 overflow-y-auto p-3 space-y-2">
-          <div class="text-center text-gray-300 text-xs py-8">Laden…</div>
-        </div>
-
-        <!-- Input -->
-        <div class="p-3 border-t border-gray-300/40 bg-white/5">
-          <form method="POST" action="{{ url_for('feed_send') }}" enctype="multipart/form-data" id="feed-form" onsubmit="return ajaxFeedSubmit(event)">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="flex gap-2 mb-2">
-              <input name="body" id="feed-input" placeholder="Nachricht schreiben..." autocomplete="off"
-                     class="flex-1 bg-white/80 border border-gray-300/60 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
-              <button type="submit" class="bg-[#1c3461] text-white px-3 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors shrink-0">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
-              </button>
-            </div>
-            <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-600">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-              <span id="file-label">Anhang hinzufügen</span>
-              <input type="file" name="file" class="hidden" onchange="document.getElementById('file-label').textContent = this.files[0]?.name || 'Anhang hinzufügen'">
-            </label>
-          </form>
-        </div>
-      </aside>
+      {% if chat_pos != 'right' %}{% include '_team_feed.html' %}{% endif %}
 
       <main class="flex-1 overflow-y-auto p-6">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -292,12 +275,14 @@
         {% endwith %}
         {% block content %}{% endblock %}
       </main>
+
+      {% if chat_pos == 'right' %}{% include '_team_feed.html' %}{% endif %}
     </div>
   </div>
 
   <!-- Reopen team-feed button -->
   <button id="feed-reopen-btn" onclick="openFeed()" title="Team-Feed öffnen"
-          class="is-hidden fixed bottom-5 left-20 z-30 bg-[#1c3461] text-white p-3 rounded-full shadow-lg hover:bg-[#2a4a8a] transition-colors">
+          class="is-hidden fixed bottom-5 {% if chat_pos == 'right' %}right-5{% else %}left-20{% endif %} z-30 bg-[#1c3461] text-white p-3 rounded-full shadow-lg hover:bg-[#2a4a8a] transition-colors">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
     </svg>
@@ -357,6 +342,7 @@ if (teamFeed) {
   const handle = document.getElementById('feed-resize-handle');
   if (!panel || !handle) return;
   const MIN_W = 260, MAX_W = 800;
+  const onRightSide = handle.dataset.side === 'right';
   let startX = 0, startWidth = 0, dragging = false;
 
   handle.addEventListener('mousedown', e => {
@@ -370,7 +356,7 @@ if (teamFeed) {
   });
   window.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const delta = e.clientX - startX;
+    const delta = onRightSide ? (startX - e.clientX) : (e.clientX - startX);
     let newWidth = startWidth + delta;
     newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
     panel.style.width = newWidth + 'px';

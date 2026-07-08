@@ -161,6 +161,23 @@ function updateInvMainMargin() {
   }
 }
 
+// If the team-feed sidebar happens to be docked on the right (configurable in
+// Einstellungen → Layout), keep this preview flush against it instead of the
+// raw viewport edge, so the two right-hand panels never overlap.
+function syncInvPreviewPosition() {
+  const panel = document.getElementById('inv-preview');
+  const feed  = document.getElementById('team-feed');
+  let rightOffset = 24;
+  if (feed && !feed.classList.contains('is-hidden')) {
+    const rect = feed.getBoundingClientRect();
+    if (rect.right >= window.innerWidth - 2) rightOffset = rect.width + 24;
+  }
+  panel.style.right = rightOffset + 'px';
+}
+syncInvPreviewPosition();
+window.addEventListener('resize', syncInvPreviewPosition);
+setInterval(syncInvPreviewPosition, 250);
+
 // Resize preview panel by dragging the left edge
 (function() {
   const panel  = document.getElementById('inv-preview');
