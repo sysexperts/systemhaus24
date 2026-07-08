@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Aktivitätsprotokoll – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <div>
+    <h1 class="text-lg font-semibold text-gray-600">Aktivitätsprotokoll</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Wer hat wann was geändert</p>
+  </div>
+</div>
+
+<!-- Filter -->
+<form method="GET" class="flex flex-wrap items-center gap-2 mb-5">
+  <select name="entity_type" onchange="this.form.submit()"
+          class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <option value="">Alle Bereiche</option>
+    {% for t in entity_types %}
+    <option value="{{ t }}" {% if t == entity_type %}selected{% endif %}>{{ t }}</option>
+    {% endfor %}
+  </select>
+  <select name="username" onchange="this.form.submit()"
+          class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <option value="">Alle Benutzer</option>
+    {% for u in usernames %}
+    <option value="{{ u }}" {% if u == username %}selected{% endif %}>{{ u }}</option>
+    {% endfor %}
+  </select>
+  {% if entity_type or username %}
+  <a href="{{ url_for('activity_log') }}" class="text-xs text-gray-400 hover:text-gray-600">Filter zurücksetzen</a>
+  {% endif %}
+  <span class="text-xs text-gray-400 ml-auto">{{ total }} Einträge</span>
+</form>
+
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Zeitpunkt</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Benutzer</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Aktion</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Bereich</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Objekt</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Details</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+    <tr class="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+      <td class="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}</td>
+      <td class="px-5 py-3 text-gray-700 font-medium">{{ r.username }}</td>
+      <td class="px-5 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium
+          {% if r.action == 'gelöscht' %}bg-red-50 text-red-600
+          {% elif r.action == 'erstellt' or r.action == 'hochgeladen' %}bg-green-50 text-green-600
+          {% elif r.action == 'storniert' %}bg-orange-50 text-orange-600
+          {% else %}bg-blue-50 text-blue-600{% endif %}">
+          {{ r.action }}
+        </span>
+      </td>
+      <td class="px-5 py-3 text-gray-500 text-xs">{{ r.entity_type }}</td>
+      <td class="px-5 py-3 text-gray-700 text-xs">{{ r.entity_label or '–' }}</td>
+      <td class="px-5 py-3 text-gray-400 text-xs">{{ r.details or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="px-5 py-12 text-center text-gray-400">Noch keine Aktivitäten protokolliert.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Pagination -->
+{% if total > per_page %}
+<div class="flex items-center justify-center gap-2 mt-4">
+  {% if page > 1 %}
+  <a href="{{ url_for('activity_log', page=page-1, entity_type=entity_type, username=username) }}"
+     class="px-3 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">← Zurück</a>
+  {% endif %}
+  <span class="text-xs text-gray-400">Seite {{ page }} von {{ ((total - 1) // per_page) + 1 }}</span>
+  {% if page * per_page < total %}
+  <a href="{{ url_for('activity_log', page=page+1, entity_type=entity_type, username=username) }}"
+     class="px-3 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Weiter →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

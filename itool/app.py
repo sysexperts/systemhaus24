@@ -77,6 +77,20 @@ def _csrf_valid():
 
 app.jinja_env.globals["csrf_token"] = _csrf_token
 
+
+def log_activity(db, action, entity_type, entity_id=None, entity_label=None, details=None):
+    """Record who changed what, for the activity/audit log. Fails silently if
+    the audit table isn't there yet (e.g. during first-ever request)."""
+    try:
+        db.execute(
+            "INSERT INTO audit_log (user_id, username, action, entity_type, entity_id, entity_label, details) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (session.get("user_id"), session.get("username", "system"), action,
+             entity_type, entity_id, entity_label, details),
+        )
+    except Exception:
+        pass
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 _log_path = os.path.join(os.path.dirname(__file__), "data", "app.log")
 _file_handler = RotatingFileHandler(_log_path, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
@@ -563,7 +577,8 @@ def customer_new():
              contact_person,contact_position,contact_email,contact_phone,contact_mobile,
              contract_type,support_level,contract_start,contract_end,monthly_rate,
              num_workstations,num_servers,it_notes,source,notes,status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", fields)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""", fields).fetchone()
+        log_activity(db, "erstellt", "Kunde", new_id["id"], fields[3])
         db.commit()
         db.close()
         flash("Kunde angelegt", "success")
@@ -587,6 +602,7 @@ def customer_edit(cid):
             contract_type=%s,support_level=%s,contract_start=%s,contract_end=%s,monthly_rate=%s,
             num_workstations=%s,num_servers=%s,it_notes=%s,source=%s,notes=%s,status=%s
             WHERE id=%s""", (*fields, cid))
+        log_activity(db, "bearbeitet", "Kunde", cid, fields[3])
         db.commit()
         db.close()
         flash("Kunde gespeichert", "success")
@@ -636,7 +652,9 @@ def customer_status(cid):
         flash("Ungültiger Status", "error")
         return redirect(url_for("customers"))
     db = get_db()
+    cust = db.execute("SELECT name FROM customers WHERE id=%s", (cid,)).fetchone()
     db.execute("UPDATE customers SET status=%s WHERE id=%s", (new_status, cid))
+    log_activity(db, "Status geändert", "Kunde", cid, cust["name"] if cust else None, f"neuer Status: {new_status}")
     db.commit()
     db.close()
     return redirect(request.referrer or url_for("customers"))
@@ -671,6 +689,7 @@ def customer_contact_delete(cid, ctid):
 @login_required
 def customer_delete(cid):
     db = get_db()
+    cust = db.execute("SELECT name FROM customers WHERE id=%s", (cid,)).fetchone()
     inv_count = db.execute(
         "SELECT COUNT(*) FROM invoices WHERE customer_id=%s AND status IN ('sent','paid')", (cid,)
     ).fetchone()[0]
@@ -688,6 +707,7 @@ def customer_delete(cid):
     db.execute("UPDATE tickets SET customer_id=NULL WHERE customer_id=%s", (cid,))
     db.execute("DELETE FROM outreach WHERE customer_id=%s", (cid,))
     db.execute("DELETE FROM customers WHERE id=%s", (cid,))
+    log_activity(db, "gelöscht", "Kunde", cid, cust["name"] if cust else None)
     db.commit()
     db.close()
     flash("Kunde gelöscht", "success")
@@ -727,6 +747,7 @@ def invoice_new():
             if desc.strip():
                 db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
                            (inv_id, desc, float(qty), float(price)))
+        log_activity(db, "erstellt", "Rechnung", inv_id, number)
         db.commit()
         db.close()
         flash(f"Rechnung {number} erstellt", "success")
@@ -862,7 +883,7 @@ _ISSUED_STATUSES = ("sent", "paid")
 @login_required
 def invoice_status(iid, status):
     db = get_db()
-    current = db.execute("SELECT status FROM invoices WHERE id=%s", (iid,)).fetchone()
+    current = db.execute("SELECT status, number FROM invoices WHERE id=%s", (iid,)).fetchone()
     if not current:
         db.close()
         abort(404)
@@ -875,6 +896,7 @@ def invoice_status(iid, status):
     db.execute("UPDATE invoices SET status=%s WHERE id=%s", (status, iid))
     if status in _ISSUED_STATUSES:
         _calc_commission_for_invoice(db, iid)
+    log_activity(db, "Status geändert", "Rechnung", iid, current["number"], f"neuer Status: {status}")
     db.commit()
     db.close()
     return redirect(url_for("invoice_view", iid=iid))
@@ -884,7 +906,7 @@ def invoice_status(iid, status):
 @admin_required
 def invoice_cancel(iid):
     db = get_db()
-    invoice = db.execute("SELECT status FROM invoices WHERE id=%s", (iid,)).fetchone()
+    invoice = db.execute("SELECT status, number FROM invoices WHERE id=%s", (iid,)).fetchone()
     if not invoice:
         db.close()
         abort(404)
@@ -893,6 +915,7 @@ def invoice_cancel(iid):
         flash("Nur versendete/bezahlte Rechnungen koennen storniert werden.", "error")
         return redirect(url_for("invoice_view", iid=iid))
     db.execute("UPDATE invoices SET status='cancelled' WHERE id=%s", (iid,))
+    log_activity(db, "storniert", "Rechnung", iid, invoice["number"])
     db.commit()
     db.close()
     flash("Rechnung storniert. Nummer und Datensatz bleiben zu Dokumentationszwecken erhalten.", "success")
@@ -913,6 +936,7 @@ def invoice_delete(iid):
               f"geloescht werden. Nutze stattdessen 'Stornieren'.", "error")
         return redirect(url_for("invoices"))
     db.execute("DELETE FROM invoices WHERE id=%s", (iid,))
+    log_activity(db, "gelöscht", "Rechnung", iid, invoice["number"])
     db.commit()
     db.close()
     flash("Rechnung gelöscht", "success")
@@ -1014,11 +1038,12 @@ def tickets():
 def ticket_new():
     db = get_db()
     if request.method == "POST":
-        db.execute("""INSERT INTO tickets (title, description, customer_id, priority, status)
-                      VALUES (%s,%s,%s,%s,%s)""",
+        new_id = db.execute("""INSERT INTO tickets (title, description, customer_id, priority, status)
+                      VALUES (%s,%s,%s,%s,%s) RETURNING id""",
                    (request.form["title"], request.form["description"],
                     request.form["customer_id"] or None,
-                    request.form["priority"], request.form["status"]))
+                    request.form["priority"], request.form["status"])).fetchone()["id"]
+        log_activity(db, "erstellt", "Ticket", new_id, request.form["title"])
         db.commit()
         db.close()
         flash("Ticket erstellt", "success")
@@ -1039,6 +1064,7 @@ def ticket_edit(tid):
                    (request.form["title"], request.form["description"],
                     request.form["customer_id"] or None,
                     request.form["priority"], request.form["status"], tid))
+        log_activity(db, "bearbeitet", "Ticket", tid, request.form["title"], f"Status: {request.form['status']}")
         db.commit()
         db.close()
         flash("Ticket gespeichert", "success")
@@ -1052,7 +1078,9 @@ def ticket_edit(tid):
 @login_required
 def ticket_delete(tid):
     db = get_db()
+    ticket = db.execute("SELECT title FROM tickets WHERE id=%s", (tid,)).fetchone()
     db.execute("DELETE FROM tickets WHERE id=%s", (tid,))
+    log_activity(db, "gelöscht", "Ticket", tid, ticket["title"] if ticket else None)
     db.commit()
     db.close()
     flash("Ticket gelöscht", "success")
@@ -1366,9 +1394,10 @@ def document_upload():
         size    = os.path.getsize(os.path.join(DOC_STORE, safe))
         mime, _ = mimetypes.guess_type(f.filename)
         db = get_db()
-        db.execute("""INSERT INTO documents (name, parent_id, type, file_path, file_size, mime_type, uploaded_by)
-                      VALUES (%s,%s,%s,%s,%s,%s,%s)""",
-                   (f.filename, parent_id, "file", safe, size, mime or "application/octet-stream", session["username"]))
+        new_id = db.execute("""INSERT INTO documents (name, parent_id, type, file_path, file_size, mime_type, uploaded_by)
+                      VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                   (f.filename, parent_id, "file", safe, size, mime or "application/octet-stream", session["username"])).fetchone()["id"]
+        log_activity(db, "hochgeladen", "Dokument", new_id, f.filename)
         db.commit()
         db.close()
     flash("Datei(en) hochgeladen", "success")
@@ -1415,7 +1444,10 @@ def document_rename(did):
     parent_id = request.form.get("parent_id") or None
     if new_name:
         db = get_db()
+        old = db.execute("SELECT name FROM documents WHERE id=%s", (did,)).fetchone()
         db.execute("UPDATE documents SET name=%s WHERE id=%s", (new_name, did))
+        log_activity(db, "umbenannt", "Dokument", did, new_name,
+                     f"vorher: {old['name']}" if old else None)
         db.commit()
         db.close()
     if parent_id:
@@ -1434,6 +1466,8 @@ def document_delete(did):
         if os.path.exists(fp):
             os.remove(fp)
     db.execute("DELETE FROM documents WHERE id=%s", (did,))
+    if doc:
+        log_activity(db, "gelöscht", "Dokument" if doc["type"] == "file" else "Ordner", did, doc["name"])
     db.commit()
     db.close()
     flash("Gelöscht", "success")
@@ -1573,6 +1607,45 @@ def profile():
 @app.route("/favicon.svg")
 def favicon():
     return send_from_directory("static", "favicon.svg", mimetype="image/svg+xml")
+
+
+# ── Aktivitätsprotokoll ────────────────────────────────────────────────────────
+
+@app.route("/activity")
+@admin_required
+def activity_log():
+    db = get_db()
+
+    entity_type = request.args.get("entity_type", "")
+    username    = request.args.get("username", "")
+    page        = max(int(request.args.get("page", 1) or 1), 1)
+    per_page    = 50
+
+    where = []
+    params = []
+    if entity_type:
+        where.append("entity_type = %s")
+        params.append(entity_type)
+    if username:
+        where.append("username = %s")
+        params.append(username)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+    total = db.execute(f"SELECT COUNT(*) FROM audit_log {where_sql}", params).fetchone()[0]
+    rows = db.execute(
+        f"SELECT * FROM audit_log {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        params + [per_page, (page - 1) * per_page]
+    ).fetchall()
+
+    entity_types = [r[0] for r in db.execute(
+        "SELECT DISTINCT entity_type FROM audit_log ORDER BY entity_type").fetchall()]
+    usernames = [r[0] for r in db.execute(
+        "SELECT DISTINCT username FROM audit_log ORDER BY username").fetchall()]
+
+    db.close()
+    return render_template("activity_log.html", rows=rows, entity_types=entity_types,
+                           usernames=usernames, entity_type=entity_type, username=username,
+                           page=page, total=total, per_page=per_page)
 
 
 # ── User Management ───────────────────────────────────────────────────────────

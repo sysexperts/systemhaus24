@@ -230,6 +230,17 @@ def init_db():
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS audit_log (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER,
+            username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            entity_label TEXT,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
         """CREATE TABLE IF NOT EXISTS recurring_invoices (
             id SERIAL PRIMARY KEY,
             customer_id INTEGER NOT NULL REFERENCES customers(id),
