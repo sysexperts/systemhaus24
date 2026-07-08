@@ -1,6 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Rechnungen – tkToolkit{% endblock %}
 {% block content %}
+<style>
+  #inv-preview {
+    width: 480px;
+    position: fixed;
+    top: 24px; right: 24px; bottom: 24px;
+    transition: opacity 0.15s ease;
+    z-index: 30;
+  }
+  #inv-preview.resizing { transition: none; }
+  #inv-preview.is-collapsed { width: 0 !important; opacity: 0; pointer-events: none; }
+  #inv-main { transition: margin-right 0.2s ease; }
+  #inv-resize-handle {
+    position: absolute; top: 0; left: -5px; width: 10px; height: 100%;
+    cursor: col-resize; z-index: 10;
+  }
+  #inv-resize-handle:hover, #inv-resize-handle.active { background: rgba(28,52,97,0.15); }
+</style>
+
+<div class="flex gap-5 items-start">
+<div id="inv-main" class="flex-1 min-w-0">
 
 <div class="flex items-center justify-between mb-5">
   <h1 class="text-lg font-semibold text-gray-600">Rechnungen</h1>
@@ -24,7 +44,7 @@
     </thead>
     <tbody>
     {% for inv in invoices %}
-    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors cursor-pointer" onclick="openInvPreview({{ inv.id }}, '{{ inv.number }}')">
       <td class="px-5 py-3 font-mono text-xs text-gray-600 font-medium">{{ inv.number }}</td>
       <td class="px-5 py-3">
         <div class="font-medium text-gray-800">{{ inv.customer_name }}</div>
@@ -39,11 +59,12 @@
         <span class="px-2.5 py-1 rounded-full text-xs font-medium
           {% if inv.status=='paid'  %}bg-green-100 text-green-700
           {% elif inv.status=='sent'%}bg-blue-100 text-blue-700
+          {% elif inv.status=='cancelled'%}bg-red-100 text-red-600
           {% else %}bg-gray-100 text-gray-500{% endif %}">
           {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt','cancelled':'Storniert'}.get(inv.status, inv.status) }}
         </span>
       </td>
-      <td class="px-5 py-3 text-right">
+      <td class="px-5 py-3 text-right" onclick="event.stopPropagation()">
         <div class="flex items-center justify-end gap-3">
           <a href="{{ url_for('invoice_view', iid=inv.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Ansehen</a>
           {% if inv.status == 'draft' %}
@@ -61,4 +82,115 @@
     </tbody>
   </table>
 </div>
+
+</div><!-- /inv-main -->
+
+<!-- Preview panel -->
+<aside id="inv-preview" class="is-collapsed shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+  <div id="inv-resize-handle" title="Breite anpassen"></div>
+  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+    <span id="inv-preview-name" class="text-sm font-medium text-gray-700 truncate pr-2">Vorschau</span>
+    <div class="flex items-center gap-1 shrink-0">
+      <a id="inv-preview-download" href="#" class="text-gray-400 hover:text-[#1c3461] transition-colors p-1" title="Herunterladen">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      </a>
+      <a id="inv-preview-open" href="#" class="text-gray-400 hover:text-[#1c3461] transition-colors p-1" title="Vollständig ansehen">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+      <button onclick="closeInvPreview()" class="text-gray-400 hover:text-gray-700 transition-colors p-1" title="Schließen">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="inv-preview-body" class="flex-1 overflow-auto bg-gray-50 flex items-center justify-center">
+    <p class="text-sm text-gray-300">Rechnung auswählen…</p>
+  </div>
+</aside>
+
+<!-- Reopen button -->
+<button id="inv-reopen-btn" onclick="openInvPreviewLast()" title="Vorschau öffnen"
+        class="is-hidden fixed bottom-5 right-5 z-30 bg-[#1c3461] text-white p-3 rounded-full shadow-lg hover:bg-[#2a4a8a] transition-colors">
+  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+</button>
+
+</div><!-- /flex row -->
+
+<style>.is-hidden { display: none !important; }</style>
+
+<script>
+let lastInvId = null;
+
+function openInvPreview(id, number) {
+  lastInvId = id;
+  const panel = document.getElementById('inv-preview');
+  const body  = document.getElementById('inv-preview-body');
+  const label = document.getElementById('inv-preview-name');
+  const dlBtn = document.getElementById('inv-preview-download');
+  const openBtn = document.getElementById('inv-preview-open');
+  const reopenBtn = document.getElementById('inv-reopen-btn');
+
+  panel.classList.remove('is-collapsed');
+  reopenBtn.classList.add('is-hidden');
+  updateInvMainMargin();
+  const savedWidth = localStorage.getItem('invPreviewWidth');
+  if (savedWidth) panel.style.width = savedWidth + 'px';
+
+  label.textContent = 'Rechnung ' + number;
+  dlBtn.href = '/invoices/' + id + '/pdf';
+  openBtn.href = '/invoices/' + id;
+  body.innerHTML = `<iframe src="/invoices/${id}/pdf?inline=1" class="w-full h-full border-0"></iframe>`;
+}
+function openInvPreviewLast() {
+  if (lastInvId) openInvPreview(lastInvId, document.getElementById('inv-preview-name').textContent.replace('Rechnung ',''));
+}
+function closeInvPreview() {
+  document.getElementById('inv-preview').classList.add('is-collapsed');
+  document.getElementById('inv-preview-body').innerHTML = '<p class="text-sm text-gray-300">Rechnung auswählen…</p>';
+  document.getElementById('inv-reopen-btn').classList.remove('is-hidden');
+  updateInvMainMargin();
+}
+function updateInvMainMargin() {
+  const panel = document.getElementById('inv-preview');
+  const main  = document.getElementById('inv-main');
+  if (panel.classList.contains('is-collapsed')) {
+    main.style.marginRight = '';
+  } else {
+    main.style.marginRight = (panel.getBoundingClientRect().width + 24) + 'px';
+  }
+}
+
+// Resize preview panel by dragging the left edge
+(function() {
+  const panel  = document.getElementById('inv-preview');
+  const handle = document.getElementById('inv-resize-handle');
+  const MIN_W = 360, MAX_W = 1200;
+  let startX = 0, startWidth = 0, dragging = false;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    panel.classList.add('resizing');
+    handle.classList.add('active');
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const delta = startX - e.clientX;
+    let newWidth = startWidth + delta;
+    newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
+    panel.style.width = newWidth + 'px';
+    updateInvMainMargin();
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('resizing');
+    handle.classList.remove('active');
+    document.body.style.userSelect = '';
+    localStorage.setItem('invPreviewWidth', Math.round(panel.getBoundingClientRect().width));
+  });
+})();
+</script>
 {% endblock %}

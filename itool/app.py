@@ -778,13 +778,17 @@ def generate_invoice_pdf_bytes(iid, db):
 def invoice_pdf(iid):
     db = get_db()
     invoice = db.execute("SELECT number FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not invoice:
+        db.close()
+        abort(404)
     try:
         pdf = generate_invoice_pdf_bytes(iid, db)
     finally:
         db.close()
     from flask import Response
+    disposition = "inline" if request.args.get("inline") else "attachment"
     return Response(pdf, mimetype="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="Rechnung_{invoice["number"]}.pdf"'})
+                    headers={"Content-Disposition": f'{disposition}; filename="Rechnung_{invoice["number"]}.pdf"'})
 
 
 @app.route("/invoices/<int:iid>/send-email", methods=["POST"])

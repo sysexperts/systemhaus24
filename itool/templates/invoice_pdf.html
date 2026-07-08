@@ -3,47 +3,57 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: A4; margin: 2cm 2.2cm; }
+  @page { size: A4; margin: 2cm 2.2cm 2.4cm 2.2cm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
 
   /* Header: two-column table */
-  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 1.2cm; }
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 0.9cm; }
   .header-table td { vertical-align: top; padding: 0; }
   .header-table td.right { text-align: right; }
 
-  .company-name { font-size: 13pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
-  .company-details { font-size: 8.5pt; color: #666; line-height: 1.6; }
+  .company-name { font-size: 12.5pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
+  .company-details { font-size: 8.5pt; color: #888; line-height: 1.6; }
 
-  .invoice-title { font-size: 22pt; font-weight: bold; color: #1c3461; letter-spacing: 2pt; }
-  .meta-table { border-collapse: collapse; margin-top: 6pt; margin-left: auto; }
-  .meta-table td { padding: 1.5pt 0; font-size: 9pt; }
-  .meta-table td.label { color: #999; padding-right: 14pt; }
-  .meta-table td.value { color: #444; font-weight: bold; }
+  .invoice-title { font-size: 20pt; font-weight: bold; color: #1c3461; letter-spacing: 3pt; margin-bottom: 8pt; }
+  .invoice-number { font-size: 9.5pt; color: #999; font-family: Courier, monospace; }
+
+  .status-badge { display: inline-block; font-size: 7.5pt; font-weight: bold; letter-spacing: 0.5pt;
+                  text-transform: uppercase; padding: 3pt 9pt; border-radius: 9pt; margin-top: 6pt; }
+  .status-paid { background: #dcf5e6; color: #1a7a42; }
+  .status-sent { background: #dbe7fb; color: #1c4fa6; }
+  .status-cancelled { background: #fbdcdc; color: #a61c1c; }
+  .status-draft { background: #eee; color: #888; }
+
+  /* Amount-due callout: the single most prominent element on the page */
+  .callout-table { width: 100%; border-collapse: collapse; background: #f3f5fa; margin-bottom: 0.9cm; }
+  .callout-table td { padding: 11pt 16pt; }
+  .callout-label { font-size: 7.5pt; color: #7a8296; text-transform: uppercase; letter-spacing: 1pt; margin-bottom: 3pt; }
+  .callout-value { font-size: 18pt; font-weight: bold; color: #1c3461; }
+  .callout-value.due { color: #444; font-size: 12pt; }
+  .callout-divider { width: 1px; background: #dfe2ea; }
 
   /* Bill-to */
-  .bill-to { margin-bottom: 1cm; }
+  .bill-to { margin-bottom: 0.9cm; }
   .bill-label { font-size: 7.5pt; color: #aaa; text-transform: uppercase; letter-spacing: 1pt; margin-bottom: 4pt; }
   .bill-name { font-weight: bold; font-size: 11pt; color: #222; margin-bottom: 2pt; }
-  .bill-sub { font-size: 9pt; color: #555; line-height: 1.6; }
-
-  /* Divider */
-  .divider { border: none; border-top: 2px solid #1c3461; margin-bottom: 0.5cm; }
+  .bill-sub { font-size: 9pt; color: #666; line-height: 1.6; }
 
   /* Items table */
-  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 0.8cm; }
-  .items-table th { padding: 5pt 4pt; font-size: 8pt; color: #888; text-transform: uppercase; letter-spacing: 0.5pt; font-weight: bold; text-align: right; border-bottom: 1px solid #ddd; }
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 0.7cm; }
+  .items-table th { padding: 6pt 4pt; font-size: 7.5pt; color: #999; text-transform: uppercase; letter-spacing: 0.5pt; font-weight: bold; text-align: right; border-bottom: 1.5px solid #1c3461; }
   .items-table th.left { text-align: left; }
-  .items-table td { padding: 6pt 4pt; font-size: 9.5pt; border-bottom: 1px solid #f0f0f0; }
+  .items-table td { padding: 7pt 4pt; font-size: 9.5pt; border-bottom: 1px solid #eee; }
   .items-table td.right { text-align: right; color: #555; }
   .items-table td.total-col { text-align: right; font-weight: bold; color: #222; }
+  .items-table tr.odd td { background: #fafbfc; }
 
   /* Totals */
   .totals-table { border-collapse: collapse; margin-left: auto; width: 260pt; }
   .totals-table td { padding: 3pt 4pt; font-size: 9.5pt; }
   .totals-table td.lbl { text-align: right; color: #777; padding-right: 12pt; }
   .totals-table td.val { text-align: right; color: #555; }
-  .totals-table tr.grand td { border-top: 2px solid #1c3461; padding-top: 6pt; font-weight: bold; font-size: 11pt; }
+  .totals-table tr.grand td { border-top: 1.5px solid #1c3461; padding-top: 7pt; font-weight: bold; font-size: 12pt; }
   .totals-table tr.grand td.lbl { color: #333; }
   .totals-table tr.grand td.val { color: #1c3461; }
 
@@ -51,18 +61,21 @@
   .notes { font-size: 9pt; color: #666; margin-top: 0.5cm; border-top: 1px solid #eee; padding-top: 0.5cm; }
 
   /* Kleingewerbe notice */
-  .kg-notice { font-size: 8.5pt; color: #555; border: 1px solid #ddd; background: #fafafa;
-               padding: 6pt 10pt; margin-top: 0.6cm; }
+  .kg-notice { font-size: 8.5pt; color: #666; background: #fafafa; padding: 8pt 12pt; margin-top: 0.6cm; }
 
   /* Payment info */
-  .payment-info { font-size: 8.5pt; color: #666; margin-top: 0.6cm; border-top: 1px solid #eee; padding-top: 0.4cm; }
+  .payment-info { border-collapse: collapse; width: 100%; margin-top: 0.7cm; }
+  .payment-info td { font-size: 8.5pt; color: #666; border-top: 1px solid #eee; padding-top: 8pt; }
+  .payment-info .pay-label { color: #999; text-transform: uppercase; letter-spacing: 0.5pt; font-size: 7.5pt; padding-bottom: 3pt; }
 
-  /* Logo */
-  .logo { max-height: 50pt; max-width: 150pt; }
+  .footer-note { text-align: center; font-size: 8pt; color: #b0b3bd; margin-top: 1cm; }
+
+  .logo { max-height: 46pt; max-width: 150pt; }
 </style>
 </head>
 <body>
 {% set kleingewerbe = cfg.get('company_kleingewerbe') == '1' %}
+{% set grand_total = total if kleingewerbe else total * 1.19 %}
 
 <!-- Header -->
 <table class="header-table">
@@ -84,11 +97,30 @@
     </td>
     <td class="right" style="width:45%">
       <div class="invoice-title">RECHNUNG</div>
-      <table class="meta-table">
-        <tr><td class="label">Rechnungsnr.</td><td class="value">{{ invoice.number }}</td></tr>
-        <tr><td class="label">Datum</td><td class="value">{{ invoice.date }}</td></tr>
-        {% if invoice.due_date %}<tr><td class="label">Fällig bis</td><td class="value">{{ invoice.due_date }}</td></tr>{% endif %}
-      </table>
+      <div class="invoice-number">{{ invoice.number }}</div>
+      <div class="status-badge status-{{ invoice.status }}">
+        {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt','cancelled':'Storniert'}.get(invoice.status, invoice.status) }}
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- Amount-due callout (most prominent element, per invoicing best practice) -->
+<table class="callout-table">
+  <tr>
+    <td style="width:33%">
+      <div class="callout-label">Gesamtbetrag</div>
+      <div class="callout-value">{{ '%.2f'|format(grand_total) }} €</div>
+    </td>
+    <td class="callout-divider"></td>
+    <td style="width:33%">
+      <div class="callout-label">Rechnungsdatum</div>
+      <div class="callout-value due">{{ invoice.date }}</div>
+    </td>
+    <td class="callout-divider"></td>
+    <td style="width:33%">
+      <div class="callout-label">Fällig bis</div>
+      <div class="callout-value due">{{ invoice.due_date or '–' }}</div>
     </td>
   </tr>
 </table>
@@ -105,8 +137,6 @@
   </div>
 </div>
 
-<hr class="divider">
-
 <!-- Items -->
 <table class="items-table">
   <thead>
@@ -120,7 +150,7 @@
   </thead>
   <tbody>
   {% for item in items %}
-  <tr>
+  <tr class="{{ 'odd' if loop.index is odd else '' }}">
     <td class="right">{{ loop.index }}</td>
     <td>{{ item.description }}</td>
     <td class="right">{{ item.quantity }}</td>
@@ -169,13 +199,19 @@
 {% endif %}
 
 {% if cfg.get('company_iban') %}
-<div class="payment-info">
-  <strong>Bankverbindung:</strong>
-  {% if cfg.get('company_bank') %}{{ cfg.get('company_bank') }} &nbsp;&middot;&nbsp; {% endif %}
-  IBAN: {{ cfg.get('company_iban') }}
-  {% if cfg.get('company_bic') %} &nbsp;&middot;&nbsp; BIC: {{ cfg.get('company_bic') }}{% endif %}
-</div>
+<table class="payment-info">
+  <tr><td class="pay-label">Bankverbindung</td></tr>
+  <tr>
+    <td>
+      {% if cfg.get('company_bank') %}{{ cfg.get('company_bank') }} &nbsp;&middot;&nbsp; {% endif %}
+      IBAN: {{ cfg.get('company_iban') }}
+      {% if cfg.get('company_bic') %} &nbsp;&middot;&nbsp; BIC: {{ cfg.get('company_bic') }}{% endif %}
+    </td>
+  </tr>
+</table>
 {% endif %}
+
+<div class="footer-note">Vielen Dank für Ihr Vertrauen — {{ cfg.get('company_name','') }}</div>
 
 </body>
 </html>

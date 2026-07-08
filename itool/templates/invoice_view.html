@@ -49,7 +49,7 @@
 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 print-doc" id="invoice-doc">
 
   <!-- Header -->
-  <div class="flex justify-between items-start mb-10">
+  <div class="flex justify-between items-start mb-8">
     <div>
       {% if cfg.get('company_logo_ext') %}
       <img src="{{ url_for('company_logo') }}" alt="Logo" class="h-14 mb-3 object-contain">
@@ -63,20 +63,32 @@
       {% if cfg.get('company_email') %}<div class="text-sm text-gray-400">{{ cfg.get('company_email') }}</div>{% endif %}
     </div>
     <div class="text-right">
-      <div class="text-3xl font-black text-[#1c3461] tracking-widest mb-3">RECHNUNG</div>
-      <table class="text-sm text-right ml-auto">
-        <tr><td class="text-gray-400 pr-4">Rechnungsnr.</td><td class="font-mono font-semibold text-gray-700">{{ invoice.number }}</td></tr>
-        <tr><td class="text-gray-400 pr-4">Datum</td><td class="text-gray-700">{{ invoice.date }}</td></tr>
-        {% if invoice.due_date %}<tr><td class="text-gray-400 pr-4">Fällig bis</td><td class="text-gray-700">{{ invoice.due_date }}</td></tr>{% endif %}
-        {% if cfg.get('company_tax_id') %}<tr><td class="text-gray-400 pr-4">Steuernr.</td><td class="text-gray-600 text-xs">{{ cfg.get('company_tax_id') }}</td></tr>{% endif %}
-      </table>
-      <span class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold
+      <div class="text-2xl font-bold text-[#1c3461] tracking-[0.2em] mb-2">RECHNUNG</div>
+      <div class="font-mono text-sm text-gray-400 mb-2">{{ invoice.number }}</div>
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide
         {% if invoice.status=='paid' %}bg-green-100 text-green-700
         {% elif invoice.status=='sent' %}bg-blue-100 text-blue-700
         {% elif invoice.status=='cancelled' %}bg-red-100 text-red-600
         {% else %}bg-gray-100 text-gray-500{% endif %}">
         {{ {'draft':'Entwurf','sent':'Gesendet','paid':'Bezahlt','cancelled':'Storniert'}.get(invoice.status, invoice.status) }}
       </span>
+      {% if cfg.get('company_tax_id') %}<div class="text-xs text-gray-400 mt-2">Steuernr.: {{ cfg.get('company_tax_id') }}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- Amount-due callout: the most important numbers on the page, front and center -->
+  <div class="bg-gray-50 rounded-xl mb-8 flex divide-x divide-gray-200 overflow-hidden">
+    <div class="flex-1 px-6 py-4">
+      <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Gesamtbetrag</p>
+      <p class="text-2xl font-bold text-[#1c3461] tabular-nums">{{ '%.2f'|format(total if kleingewerbe else total * 1.19) }} €</p>
+    </div>
+    <div class="flex-1 px-6 py-4">
+      <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Rechnungsdatum</p>
+      <p class="text-lg font-semibold text-gray-700">{{ invoice.date }}</p>
+    </div>
+    <div class="flex-1 px-6 py-4">
+      <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Fällig bis</p>
+      <p class="text-lg font-semibold text-gray-700">{{ invoice.due_date or '–' }}</p>
     </div>
   </div>
 
@@ -93,7 +105,7 @@
   <!-- Items -->
   <table class="w-full text-sm mb-8">
     <thead>
-      <tr class="border-b-2 border-gray-200">
+      <tr class="border-b-2 border-[#1c3461]">
         <th class="py-2 text-left text-xs text-gray-400 uppercase tracking-wide">Pos.</th>
         <th class="py-2 text-left text-xs text-gray-400 uppercase tracking-wide">Beschreibung</th>
         <th class="py-2 text-right text-xs text-gray-400 uppercase tracking-wide">Menge</th>
@@ -103,12 +115,12 @@
     </thead>
     <tbody>
     {% for item in items %}
-    <tr class="border-b border-gray-50">
-      <td class="py-3 text-gray-400 text-xs">{{ loop.index }}</td>
+    <tr class="border-b border-gray-50 {% if loop.index is odd %}bg-gray-50/60{% endif %}">
+      <td class="py-3 text-gray-400 text-xs pl-2">{{ loop.index }}</td>
       <td class="py-3 text-gray-700">{{ item.description }}</td>
       <td class="py-3 text-right text-gray-500">{{ item.quantity }}</td>
       <td class="py-3 text-right text-gray-500">{{ '%.2f'|format(item.unit_price) }} €</td>
-      <td class="py-3 text-right font-medium text-gray-800">{{ '%.2f'|format(item.quantity * item.unit_price) }} €</td>
+      <td class="py-3 text-right font-medium text-gray-800 pr-2">{{ '%.2f'|format(item.quantity * item.unit_price) }} €</td>
     </tr>
     {% endfor %}
     </tbody>
