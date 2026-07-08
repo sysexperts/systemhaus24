@@ -89,6 +89,19 @@ def fmtdt(value, fmt="%Y-%m-%d %H:%M"):
     return str(value)[:16].replace("T", " ")
 
 
+@app.template_filter("fmtdate")
+def fmtdate(value):
+    """Format a plain ISO date (YYYY-MM-DD, string or date/datetime) as TT.MM.JJJJ."""
+    if not value:
+        return "–"
+    if hasattr(value, "strftime"):
+        return value.strftime("%d.%m.%Y")
+    try:
+        return date.fromisoformat(str(value)[:10]).strftime("%d.%m.%Y")
+    except Exception:
+        return str(value)
+
+
 def log_activity(db, action, entity_type, entity_id=None, entity_label=None, details=None):
     """Record who changed what, for the activity/audit log. Fails silently if
     the audit table isn't there yet (e.g. during first-ever request)."""
@@ -2718,17 +2731,28 @@ def check_recurring_invoices():
 @login_required
 def recurring_list():
     db = get_db()
-    recs = db.execute("""
+    filter_customer_id = request.args.get("customer_id", "")
+    query = """
         SELECT r.*, c.name as customer_name, c.company as customer_company,
                (SELECT COALESCE(SUM(quantity*unit_price),0) FROM recurring_invoice_items WHERE recurring_id=r.id) as total
         FROM recurring_invoices r
         JOIN customers c ON c.id=r.customer_id
-        ORDER BY r.status DESC, r.next_date ASC
-    """).fetchall()
+    """
+    params = []
+    if filter_customer_id:
+        query += " WHERE r.customer_id=%s"
+        params.append(filter_customer_id)
+    query += " ORDER BY r.status DESC, r.next_date ASC"
+    recs = db.execute(query, params).fetchall()
     customers = db.execute("SELECT id, name, company FROM customers WHERE status='customer' ORDER BY name").fetchall()
+    filter_customers = db.execute("""
+        SELECT DISTINCT c.id, c.name, c.company FROM customers c
+        JOIN recurring_invoices r ON r.customer_id=c.id ORDER BY c.name
+    """).fetchall()
     db.close()
     interval_labels = {"monthly": "Monatlich", "quarterly": "Vierteljährlich", "yearly": "Jährlich"}
     return render_template("recurring.html", recs=recs, customers=customers,
+                           filter_customers=filter_customers, filter_customer_id=filter_customer_id,
                            interval_labels=interval_labels)
 
 

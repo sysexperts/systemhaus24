@@ -129,7 +129,7 @@
       </button>
       <div id="menu-inv" class="submenu pl-8 mt-1 space-y-0.5 {% if 'invoice' in (request.endpoint or '') or 'recurring' in (request.endpoint or '') %}open{% endif %}">
         <a href="{{ url_for('invoices') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Rechnungen</a>
-        <a href="{{ url_for('recurring_list') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Abo-Rechnungen</a>
+        <a href="{{ url_for('recurring_list') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Wiederkehrende Rechnungen</a>
       </div>
     </div>
 
