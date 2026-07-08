@@ -31,7 +31,8 @@
 </div>
 
 <div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
-  <table class="w-full text-sm">
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm" style="min-width:640px;">
     <thead>
       <tr class="border-b border-gray-100">
         <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Nummer</th>
@@ -81,6 +82,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
 </div><!-- /inv-main -->
