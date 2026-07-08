@@ -1405,15 +1405,75 @@ def api_counts():
 
 # ── Backup ────────────────────────────────────────────────────────────────────
 
+def _safe_path_component(name):
+    name = (name or "").strip().replace("/", "-").replace("\\", "-")
+    return name or "Unbenannt"
+
+
+def _build_document_arcnames(db):
+    """Map each file-type document id to a human-readable zip path that mirrors
+    the folder structure and original filenames shown in the Dokumente module."""
+    rows = db.execute("SELECT id, name, parent_id, type, file_path FROM documents").fetchall()
+    by_id = {r["id"]: r for r in rows}
+
+    def folder_path(folder_id):
+        parts = []
+        seen = set()
+        while folder_id is not None and folder_id in by_id and folder_id not in seen:
+            seen.add(folder_id)
+            node = by_id[folder_id]
+            parts.append(_safe_path_component(node["name"]))
+            folder_id = node["parent_id"]
+        return list(reversed(parts))
+
+    arcnames = {}
+    used_names = {}
+    for r in rows:
+        if r["type"] != "file":
+            continue
+        folder_parts = folder_path(r["parent_id"])
+        base_name = _safe_path_component(r["name"] or os.path.basename(r["file_path"] or ""))
+        dir_key = tuple(folder_parts)
+        used_names.setdefault(dir_key, set())
+        final_name = base_name
+        n = 1
+        while final_name in used_names[dir_key]:
+            stem, ext = os.path.splitext(base_name)
+            final_name = f"{stem} ({n}){ext}"
+            n += 1
+        used_names[dir_key].add(final_name)
+        arcnames[r["id"]] = "/".join(["Dokumente"] + folder_parts + [final_name])
+    return arcnames
+
+
 @app.route("/backup")
 @admin_required
 def backup():
     import zipfile, io
     data_dir = os.path.join(os.path.dirname(__file__), "data")
+    doc_store_dir = os.path.join(data_dir, "documents")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    db = get_db()
+    doc_arcnames = _build_document_arcnames(db)
+    doc_rows = {r["id"]: r for r in db.execute("SELECT id, file_path FROM documents WHERE type='file'").fetchall()}
+    db.close()
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Dokumente: reconstructed folder structure with original filenames
+        for doc_id, arcname in doc_arcnames.items():
+            row = doc_rows.get(doc_id)
+            if not row or not row["file_path"]:
+                continue
+            full = os.path.join(doc_store_dir, os.path.basename(row["file_path"]))
+            if os.path.exists(full):
+                zf.write(full, arcname)
+
+        # Everything else (database, uploads, accounting imports, ...) unchanged
         for root, dirs, files in os.walk(data_dir):
+            if os.path.commonpath([root, doc_store_dir]) == doc_store_dir:
+                continue  # already handled above with proper names/paths
             for fname in files:
                 if fname.endswith(".db") and fname != "itool.db":
                     continue  # alte backup_.db überspringen
