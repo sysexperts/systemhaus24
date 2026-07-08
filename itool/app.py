@@ -1510,6 +1510,51 @@ def api_counts():
     return jsonify(tickets=tickets, invoices=invoices)
 
 
+@app.route("/api/search")
+@login_required
+def api_search():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify(customers=[], invoices=[], tickets=[], documents=[])
+
+    like = f"%{q}%"
+    db = get_db()
+
+    customers = db.execute("""
+        SELECT id, name, company, email FROM customers
+        WHERE name ILIKE %s OR company ILIKE %s OR email ILIKE %s
+        ORDER BY name LIMIT 6
+    """, (like, like, like)).fetchall()
+
+    invoices = db.execute("""
+        SELECT i.id, i.number, i.status, c.name as customer_name, c.company as customer_company
+        FROM invoices i JOIN customers c ON c.id = i.customer_id
+        WHERE i.number ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s
+        ORDER BY i.created_at DESC LIMIT 6
+    """, (like, like, like)).fetchall()
+
+    tickets = db.execute("""
+        SELECT t.id, t.title, t.status, c.name as customer_name, c.company as customer_company
+        FROM tickets t LEFT JOIN customers c ON c.id = t.customer_id
+        WHERE t.title ILIKE %s OR t.description ILIKE %s
+        ORDER BY t.created_at DESC LIMIT 6
+    """, (like, like)).fetchall()
+
+    documents = db.execute("""
+        SELECT id, name, parent_id FROM documents
+        WHERE type='file' AND name ILIKE %s
+        ORDER BY created_at DESC LIMIT 6
+    """, (like,)).fetchall()
+
+    db.close()
+    return jsonify(
+        customers=[dict(r) for r in customers],
+        invoices=[dict(r) for r in invoices],
+        tickets=[dict(r) for r in tickets],
+        documents=[dict(r) for r in documents],
+    )
+
+
 # ── Backup ────────────────────────────────────────────────────────────────────
 
 def _safe_path_component(name):
