@@ -30,7 +30,7 @@
   #team-feed.resizing { transition: none; }
   .is-hidden { display: none !important; }
   #feed-resize-handle {
-    position: absolute; top: 0; left: -5px; width: 10px; height: 100%;
+    position: absolute; top: 0; right: -5px; width: 10px; height: 100%;
     cursor: col-resize; z-index: 10;
   }
   #feed-resize-handle:hover, #feed-resize-handle.active { background: rgba(28,52,97,0.15); }
@@ -236,23 +236,10 @@
   <div class="flex flex-col flex-1 overflow-hidden relative z-10">
 
 
-    <!-- Content + Feed -->
+    <!-- Feed + Content -->
     <div class="flex flex-1 overflow-hidden">
-      <main class="flex-1 overflow-y-auto p-6">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% for cat, msg in messages %}
-            <div class="mb-4 px-4 py-2.5 rounded-xl text-sm shadow-sm
-                        {% if cat=='error' %}bg-red-100 text-red-700 border border-red-200
-                        {% else %}bg-green-100 text-green-700 border border-green-200{% endif %}">
-              {{ msg }}
-            </div>
-          {% endfor %}
-        {% endwith %}
-        {% block content %}{% endblock %}
-      </main>
-
-      <!-- Right team feed -->
-      <aside id="team-feed" class="shrink-0 border-l border-gray-300/50 flex flex-col bg-white/10">
+      <!-- Left team feed -->
+      <aside id="team-feed" class="shrink-0 border-r border-gray-300/50 flex flex-col bg-white/10">
         <div id="feed-resize-handle" title="Breite anpassen"></div>
         <div class="px-4 py-3 border-b border-gray-300/40 flex items-center gap-2">
           <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,12 +279,25 @@
           </form>
         </div>
       </aside>
+
+      <main class="flex-1 overflow-y-auto p-6">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in messages %}
+            <div class="mb-4 px-4 py-2.5 rounded-xl text-sm shadow-sm
+                        {% if cat=='error' %}bg-red-100 text-red-700 border border-red-200
+                        {% else %}bg-green-100 text-green-700 border border-green-200{% endif %}">
+              {{ msg }}
+            </div>
+          {% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </main>
     </div>
   </div>
 
   <!-- Reopen team-feed button -->
   <button id="feed-reopen-btn" onclick="openFeed()" title="Team-Feed öffnen"
-          class="is-hidden fixed bottom-5 right-5 z-30 bg-[#1c3461] text-white p-3 rounded-full shadow-lg hover:bg-[#2a4a8a] transition-colors">
+          class="is-hidden fixed bottom-5 left-20 z-30 bg-[#1c3461] text-white p-3 rounded-full shadow-lg hover:bg-[#2a4a8a] transition-colors">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
     </svg>
@@ -370,7 +370,7 @@ if (teamFeed) {
   });
   window.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const delta = startX - e.clientX;
+    const delta = e.clientX - startX;
     let newWidth = startWidth + delta;
     newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
     panel.style.width = newWidth + 'px';
