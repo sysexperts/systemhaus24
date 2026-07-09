@@ -360,6 +360,9 @@ def init_db():
         conn.execute(sql)
 
     conn.commit()
+
+    _safe_alter(conn, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)")
+
     conn.close()
 
 

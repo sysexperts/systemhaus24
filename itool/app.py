@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import threading
 import time
@@ -326,6 +327,16 @@ def feed_send():
         db = get_db()
         db.execute("INSERT INTO feed_messages (user_id, username, body, attachment) VALUES (%s,%s,%s,%s)",
                    (session["user_id"], session["username"], body or "", attachment))
+        # Detect @mentions and notify each mentioned user
+        if body:
+            sender = session.get("display_name") or session.get("username")
+            for uname in set(re.findall(r'@(\w+)', body)):
+                user = db.execute("SELECT id FROM users WHERE username=%s", (uname,)).fetchone()
+                if user and user["id"] != session["user_id"]:
+                    preview = body[:80] + ("…" if len(body) > 80 else "")
+                    db.execute(
+                        "INSERT INTO notifications (type, title, body, link, target_user_id) VALUES (%s,%s,%s,%s,%s)",
+                        ("mention", f"{sender} hat dich erwähnt", f'"{preview}"', None, user["id"]))
         db.commit()
         db.close()
     return redirect(request.referrer or url_for("dashboard"))
@@ -1513,12 +1524,21 @@ def api_counts():
 @app.route("/api/notifications")
 @login_required
 def api_notifications():
-    if session.get("role") != "admin":
-        return jsonify([])
+    uid = session["user_id"]
+    is_admin = session.get("role") == "admin"
     db = get_db()
-    rows = db.execute(
-        "SELECT id, type, title, body, link FROM notifications WHERE is_read=0 ORDER BY created_at DESC LIMIT 10"
-    ).fetchall()
+    if is_admin:
+        rows = db.execute(
+            """SELECT id, type, title, body, link FROM notifications
+               WHERE is_read=0 AND (target_user_id=%s OR target_user_id IS NULL)
+               ORDER BY created_at DESC LIMIT 10""", (uid,)
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """SELECT id, type, title, body, link FROM notifications
+               WHERE is_read=0 AND target_user_id=%s
+               ORDER BY created_at DESC LIMIT 10""", (uid,)
+        ).fetchall()
     db.close()
     return jsonify([dict(r) for r in rows])
 
@@ -1526,13 +1546,21 @@ def api_notifications():
 @app.route("/api/notifications/<int:nid>/read", methods=["POST"])
 @login_required
 def api_notification_read(nid):
-    if session.get("role") != "admin":
-        return jsonify(ok=False)
+    uid = session["user_id"]
     db = get_db()
-    db.execute("UPDATE notifications SET is_read=1 WHERE id=%s", (nid,))
+    db.execute("UPDATE notifications SET is_read=1 WHERE id=%s AND (target_user_id=%s OR target_user_id IS NULL)", (nid, uid))
     db.commit()
     db.close()
     return jsonify(ok=True)
+
+
+@app.route("/api/users")
+@login_required
+def api_users():
+    db = get_db()
+    rows = db.execute("SELECT username, display_name FROM users ORDER BY display_name").fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/search")

@@ -22,8 +22,10 @@
   <div class="p-3 border-t border-gray-300/40 bg-white/5">
     <form method="POST" action="{{ url_for('feed_send') }}" enctype="multipart/form-data" id="feed-form" onsubmit="return ajaxFeedSubmit(event)">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <!-- @mention autocomplete -->
+      <div id="mention-dropdown" class="hidden mb-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-40 overflow-y-auto"></div>
       <div class="flex gap-2 mb-2">
-        <input name="body" id="feed-input" placeholder="Nachricht schreiben..." autocomplete="off"
+        <input name="body" id="feed-input" placeholder="Nachricht schreiben… (@Name erwähnen)" autocomplete="off"
                class="flex-1 bg-white/80 border border-gray-300/60 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
         <button type="submit" class="bg-[#1c3461] text-white px-3 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

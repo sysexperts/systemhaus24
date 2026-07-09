@@ -417,6 +417,12 @@ function avatarHtml(m, size='w-6 h-6') {
   return `<div class="${size} rounded-full bg-[#1c3461] flex items-center justify-center shrink-0"><span class="text-white text-[10px] font-bold">${esc(label)}</span></div>`;
 }
 
+function highlightMentions(text) {
+  // esc() first, then highlight @mentions
+  return esc(text).replace(/@(\w+)/g, (_, u) =>
+    `<span class="font-semibold" style="color:var(--accent)">@${u}</span>`);
+}
+
 function renderFeedMsg(m) {
   const own = m.user_id === CURRENT_USER_ID;
   const displayName = m.display_name || m.username;
@@ -457,7 +463,7 @@ function renderFeedMsg(m) {
           ${ownBtns}
         </div>
       </div>
-      <div class="msg-body text-xs text-gray-700 leading-relaxed pl-8">${esc(m.body)}</div>
+      <div class="msg-body text-xs text-gray-700 leading-relaxed pl-8">${highlightMentions(m.body)}</div>
       ${attHtml}
     </div>`;
 }
@@ -641,13 +647,119 @@ document.addEventListener('keydown', e => {
   }
 });
 
-{% if session.get('role') == 'admin' %}
-// ── Promoter-Benachrichtigungen ─────────────────────────────────────────────
+// ── @Mention Autocomplete ────────────────────────────────────────────────────
+let _allUsers = [];
+fetch('/api/users').then(r => r.json()).then(u => { _allUsers = u; }).catch(() => {});
+
+(function() {
+  const input = document.getElementById('feed-input');
+  const dropdown = document.getElementById('mention-dropdown');
+  if (!input || !dropdown) return;
+
+  let _mentionStart = -1;
+
+  input.addEventListener('input', () => {
+    const val = input.value;
+    const pos = input.selectionStart;
+    // find the last @ before cursor
+    const before = val.slice(0, pos);
+    const m = before.match(/@(\w*)$/);
+    if (!m) { closeMentionDropdown(); return; }
+    _mentionStart = before.lastIndexOf('@');
+    const query = m[1].toLowerCase();
+    const matches = _allUsers.filter(u =>
+      u.username.toLowerCase().includes(query) ||
+      (u.display_name || '').toLowerCase().includes(query)
+    ).slice(0, 6);
+    if (!matches.length) { closeMentionDropdown(); return; }
+    dropdown.innerHTML = matches.map(u => `
+      <button type="button" data-username="${u.username}"
+        class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 transition-colors text-left">
+        <span class="font-medium text-gray-800">${esc(u.display_name || u.username)}</span>
+        <span class="text-xs text-gray-400">@${esc(u.username)}</span>
+      </button>`).join('');
+    dropdown.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('mousedown', e => {
+        e.preventDefault();
+        insertMention(btn.dataset.username);
+      });
+    });
+    dropdown.classList.remove('hidden');
+  });
+
+  input.addEventListener('keydown', e => {
+    if (dropdown.classList.contains('hidden')) return;
+    const btns = [...dropdown.querySelectorAll('button')];
+    const focused = dropdown.querySelector('button:focus');
+    const idx = focused ? btns.indexOf(focused) : -1;
+    if (e.key === 'ArrowDown') { e.preventDefault(); btns[Math.min(idx + 1, btns.length - 1)]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx > 0 ? btns[idx - 1].focus() : input.focus(); }
+    else if (e.key === 'Enter' && focused) { e.preventDefault(); insertMention(focused.dataset.username); }
+    else if (e.key === 'Escape') { closeMentionDropdown(); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!dropdown.contains(e.target) && e.target !== input) closeMentionDropdown();
+  });
+
+  function insertMention(username) {
+    const val = input.value;
+    const pos = input.selectionStart;
+    const before = val.slice(0, _mentionStart);
+    const after = val.slice(pos);
+    const inserted = `@${username} `;
+    input.value = before + inserted + after;
+    const newPos = before.length + inserted.length;
+    input.setSelectionRange(newPos, newPos);
+    input.focus();
+    closeMentionDropdown();
+  }
+
+  function closeMentionDropdown() {
+    dropdown.classList.add('hidden');
+    dropdown.innerHTML = '';
+  }
+})();
+
+// ── Notification Sound ───────────────────────────────────────────────────────
+function playNotifSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (type === 'mention') {
+      // Zwei kurze Töne — dezenter Ping
+      [0, 0.12].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = i === 0 ? 880 : 1100;
+        gain.gain.setValueAtTime(0.06, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.25);
+      });
+    } else {
+      // Einzelner weicher Ton für andere Notifications
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = 660;
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+    }
+  } catch(_) {}
+}
+
+// ── Benachrichtigungen (alle User) ──────────────────────────────────────────
 const _shownNotifs = new Set();
 
 function showNotifToast(n) {
   if (_shownNotifs.has(n.id)) return;
   _shownNotifs.add(n.id);
+  playNotifSound(n.type);
 
   const toast = document.createElement('div');
   toast.className = 'fixed bottom-6 right-6 z-[9999] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden';
@@ -702,7 +814,6 @@ async function pollNotifications() {
 
 pollNotifications();
 setInterval(pollNotifications, 30000);
-{% endif %}
 </script>
 
 <style>
