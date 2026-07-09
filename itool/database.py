@@ -354,6 +354,12 @@ def init_db():
             is_read INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS user_notification_prefs (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            pref_key TEXT NOT NULL,
+            pref_value TEXT NOT NULL DEFAULT '1',
+            PRIMARY KEY (user_id, pref_key)
+        )""",
     ]
 
     for sql in stmts:
@@ -362,6 +368,7 @@ def init_db():
     conn.commit()
 
     _safe_alter(conn, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)")
+    _safe_alter(conn, "ALTER TABLE user_notification_prefs ADD COLUMN IF NOT EXISTS pref_value TEXT NOT NULL DEFAULT '1'")
 
     conn.close()
 
