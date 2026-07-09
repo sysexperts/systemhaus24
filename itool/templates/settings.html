@@ -12,7 +12,7 @@
 
 <!-- Tabs -->
 <div class="flex gap-1 mb-5 bg-white/60 rounded-2xl p-1.5 w-fit shadow-sm border border-white">
-  {% for tid, tlabel in [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('layout','Layout'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang'),('benachrichtigungen','Benachrichtigungen')] %}
+  {% for tid, tlabel in [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('layout','Layout'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang')] %}
   <button onclick="switchTab('{{ tid }}')" id="tab-{{ tid }}"
           class="tab-btn px-4 py-2 rounded-xl text-sm font-medium transition-colors text-gray-500 hover:text-gray-700">
     {{ tlabel }}
@@ -519,53 +519,8 @@
   </div>
 </div>
 
-<!-- ══════════════ TAB: Benachrichtigungen ══════════════ -->
-<div id="pane-benachrichtigungen" class="tab-pane hidden">
-  <form method="POST" action="{{ url_for('settings_notifications') }}#benachrichtigungen">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6 max-w-xl mb-5">
-      <div class="flex items-center gap-2 mb-1">
-        <svg class="w-4 h-4 text-[#1c3461]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-        </svg>
-        <p class="text-sm font-semibold text-gray-700">Popup-Benachrichtigungen</p>
-      </div>
-      <p class="text-xs text-gray-400 mb-5">Wähle welche Ereignisse dir als Popup angezeigt werden sollen. Einstellungen gelten nur für deinen Benutzer.</p>
-
-      <div class="space-y-3">
-        {% set notif_items = [
-          ('notif_sound',         '🔔', 'Sound aktivieren',      'Spielt einen dezenten Ton ab wenn eine Benachrichtigung erscheint'),
-          ('notif_mention',       '💬', '@Erwähnungen',          'Wenn dich jemand im Team-Chat mit @Name erwähnt'),
-          ('notif_new_ticket',    '🎫', 'Neues Ticket',          'Wenn ein neues Support-Ticket erstellt wird'),
-          ('notif_new_invoice',   '🧾', 'Neue Rechnung',         'Wenn eine neue Rechnung erstellt wird'),
-          ('notif_invoice_paid',  '✅', 'Rechnung bezahlt',      'Wenn eine Rechnung als bezahlt markiert wird'),
-          ('notif_new_promoter',  '🤝', 'Neuer Promoter',        'Wenn sich jemand über einen Promoter-Link registriert'),
-          ('notif_payout',        '💸', 'Auszahlungsanfrage',    'Wenn ein Promoter eine Auszahlung beantragt'),
-        ] %}
-        {% for key, icon, label, desc in notif_items %}
-        <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 cursor-pointer transition-colors">
-          <input type="checkbox" name="{{ key }}" value="1"
-                 {% if notif_prefs.get(key, '1') == '1' %}checked{% endif %}
-                 class="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1c3461]">
-          <div class="flex-1">
-            <div class="text-sm font-medium text-gray-700">{{ icon }} {{ label }}</div>
-            <div class="text-xs text-gray-400 mt-0.5">{{ desc }}</div>
-          </div>
-        </label>
-        {% endfor %}
-      </div>
-
-      <div class="mt-5">
-        <button type="submit" class="bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
-          Speichern
-        </button>
-      </div>
-    </div>
-  </form>
-</div>
-
 <script>
-const TABS = ['allgemein','firma','layout','smtp','imap','benachrichtigungen'];
+const TABS = ['allgemein','firma','layout','smtp','imap'];
 
 function switchTab(id) {
   TABS.forEach(t => {
@@ -584,6 +539,6 @@ function switchTab(id) {
 
 // Activate tab from URL hash or default
 const hash = location.hash.replace('#','');
-switchTab(TABS.includes(hash) ? hash : TABS[0]);
+switchTab(TABS.includes(hash) ? hash : 'allgemein');
 </script>
 {% endblock %}

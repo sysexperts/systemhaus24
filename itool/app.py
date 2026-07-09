@@ -386,15 +386,7 @@ def feed_messages_json():
         ORDER BY fm.created_at ASC LIMIT 100
     """).fetchall()
     db.close()
-    result = []
-    for r in rows:
-        d = dict(r)
-        if isinstance(d.get("created_at"), datetime):
-            d["created_at"] = d["created_at"].strftime("%Y-%m-%dT%H:%M:%S")
-        else:
-            d["created_at"] = str(d["created_at"])[:19].replace(" ", "T")
-        result.append(d)
-    return jsonify(result)
+    return jsonify([dict(r) for r in rows])
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1525,58 +1517,26 @@ def api_counts():
     return jsonify(tickets=tickets, invoices=invoices)
 
 
-NOTIF_PREF_KEYS = [
-    "notif_mention", "notif_new_ticket", "notif_new_invoice",
-    "notif_invoice_paid", "notif_new_promoter", "notif_payout", "notif_sound",
-]
-NOTIF_TYPE_TO_PREF = {
-    "mention": "notif_mention",
-    "new_ticket": "notif_new_ticket",
-    "new_invoice": "notif_new_invoice",
-    "invoice_paid": "notif_invoice_paid",
-    "promoter_register": "notif_new_promoter",
-    "payout_request": "notif_payout",
-}
-
-
-def get_user_notif_prefs(uid, db):
-    rows = db.execute(
-        "SELECT pref_key, pref_value FROM user_notification_prefs WHERE user_id=%s", (uid,)
-    ).fetchall()
-    prefs = {r["pref_key"]: r["pref_value"] for r in rows}
-    # Default all to enabled
-    return {k: prefs.get(k, "1") for k in NOTIF_PREF_KEYS}
-
-
 @app.route("/api/notifications")
 @login_required
 def api_notifications():
     uid = session["user_id"]
     is_admin = session.get("role") == "admin"
     db = get_db()
-    prefs = get_user_notif_prefs(uid, db)
     if is_admin:
         rows = db.execute(
             """SELECT id, type, title, body, link FROM notifications
                WHERE is_read=0 AND (target_user_id=%s OR target_user_id IS NULL)
-               ORDER BY created_at DESC LIMIT 20""", (uid,)
+               ORDER BY created_at DESC LIMIT 10""", (uid,)
         ).fetchall()
     else:
         rows = db.execute(
             """SELECT id, type, title, body, link FROM notifications
                WHERE is_read=0 AND target_user_id=%s
-               ORDER BY created_at DESC LIMIT 20""", (uid,)
+               ORDER BY created_at DESC LIMIT 10""", (uid,)
         ).fetchall()
     db.close()
-    # Filter by user prefs
-    result = []
-    for r in rows:
-        pref_key = NOTIF_TYPE_TO_PREF.get(r["type"])
-        if pref_key is None or prefs.get(pref_key, "1") == "1":
-            d = dict(r)
-            d["sound"] = prefs.get("notif_sound", "1")
-            result.append(d)
-    return jsonify(result[:10])
+    return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/notifications/<int:nid>/read", methods=["POST"])
@@ -1949,29 +1909,8 @@ def settings():
         db.commit()
         flash("Einstellungen gespeichert", "success")
     cfg = get_settings(db)
-    uid = session["user_id"]
-    notif_prefs = get_user_notif_prefs(uid, db)
     db.close()
-    return render_template("settings.html", cfg=cfg, notif_prefs=notif_prefs)
-
-
-@app.route("/settings/notifications", methods=["POST"])
-@login_required
-def settings_notifications():
-    db = get_db()
-    uid = session["user_id"]
-    for key in NOTIF_PREF_KEYS:
-        val = "1" if request.form.get(key) else "0"
-        db.execute(
-            """INSERT INTO user_notification_prefs (user_id, pref_key, pref_value)
-               VALUES (%s, %s, %s)
-               ON CONFLICT (user_id, pref_key) DO UPDATE SET pref_value=%s""",
-            (uid, key, val, val)
-        )
-    db.commit()
-    db.close()
-    flash("Benachrichtigungseinstellungen gespeichert", "success")
-    return redirect(url_for("settings") + "#benachrichtigungen")
+    return render_template("settings.html", cfg=cfg)
 
 
 def _save_logo_file(file_obj, key_prefix):
