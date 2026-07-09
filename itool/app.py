@@ -221,8 +221,6 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
-        if session.get("role") == "promoter":
-            return redirect(url_for("promoter_dashboard"))
         return f(*args, **kwargs)
     return decorated
 
@@ -258,8 +256,6 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
-        if session.get("role") == "promoter":
-            return redirect(url_for("promoter_dashboard"))
         if session.get("role") != "admin":
             flash("Kein Zugriff – nur für Administratoren.", "error")
             return redirect(url_for("dashboard"))
@@ -447,7 +443,7 @@ def login():
             session["username"] = user["username"]
             session["display_name"] = user["display_name"] or user["username"]
             session["role"] = user["role"] or "admin"
-            dest = url_for("promoter_dashboard") if session["role"] == "promoter" else url_for("dashboard")
+            dest = url_for("dashboard")
             resp = make_response(redirect(dest))
             resp.set_cookie("last_uid",          str(user["id"]),                          max_age=30*24*3600)
             resp.set_cookie("last_display_name", user["display_name"] or user["username"], max_age=30*24*3600)
