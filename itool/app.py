@@ -1993,8 +1993,19 @@ def api_search():
         SELECT i.id, i.number, i.status, c.name as customer_name, c.company as customer_company
         FROM invoices i JOIN customers c ON c.id = i.customer_id
         WHERE i.number ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s
+              OR i.notes ILIKE %s
+              OR EXISTS (SELECT 1 FROM invoice_items it WHERE it.invoice_id=i.id AND it.description ILIKE %s)
         ORDER BY i.created_at DESC LIMIT 6
-    """, (like, like, like)).fetchall()
+    """, (like, like, like, like, like)).fetchall()
+
+    quotes = db.execute("""
+        SELECT q.id, q.number, q.status, c.name as customer_name, c.company as customer_company
+        FROM quotes q JOIN customers c ON c.id = q.customer_id
+        WHERE q.number ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s
+              OR q.notes ILIKE %s
+              OR EXISTS (SELECT 1 FROM quote_items it WHERE it.quote_id=q.id AND it.description ILIKE %s)
+        ORDER BY q.created_at DESC LIMIT 6
+    """, (like, like, like, like, like)).fetchall()
 
     tickets = db.execute("""
         SELECT t.id, t.title, t.status, c.name as customer_name, c.company as customer_company
@@ -2002,6 +2013,18 @@ def api_search():
         WHERE t.title ILIKE %s OR t.description ILIKE %s
         ORDER BY t.created_at DESC LIMIT 6
     """, (like, like)).fetchall()
+
+    leads = db.execute("""
+        SELECT id, company, contact_name, contact_email, stage FROM leads
+        WHERE company ILIKE %s OR contact_name ILIKE %s OR contact_email ILIKE %s
+        ORDER BY id DESC LIMIT 6
+    """, (like, like, like)).fetchall()
+
+    articles = db.execute("""
+        SELECT id, name, description, unit_price FROM articles
+        WHERE active=1 AND (name ILIKE %s OR description ILIKE %s OR article_number ILIKE %s)
+        ORDER BY name LIMIT 6
+    """, (like, like, like)).fetchall()
 
     documents = db.execute("""
         SELECT id, name, parent_id FROM documents
@@ -2013,7 +2036,10 @@ def api_search():
     return jsonify(
         customers=[dict(r) for r in customers],
         invoices=[dict(r) for r in invoices],
+        quotes=[dict(r) for r in quotes],
         tickets=[dict(r) for r in tickets],
+        leads=[dict(r) for r in leads],
+        articles=[dict(r) for r in articles],
         documents=[dict(r) for r in documents],
     )
 
