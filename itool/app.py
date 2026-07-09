@@ -386,7 +386,15 @@ def feed_messages_json():
         ORDER BY fm.created_at ASC LIMIT 100
     """).fetchall()
     db.close()
-    return jsonify([dict(r) for r in rows])
+    result = []
+    for r in rows:
+        d = dict(r)
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].strftime("%Y-%m-%dT%H:%M:%S")
+        else:
+            d["created_at"] = str(d["created_at"])[:19].replace(" ", "T")
+        result.append(d)
+    return jsonify(result)
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
