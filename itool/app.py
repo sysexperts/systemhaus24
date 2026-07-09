@@ -444,25 +444,36 @@ def login():
             return render_template("login.html")
         db = get_db()
         user = db.execute("SELECT * FROM users WHERE username=%s", (request.form.get("username", ""),)).fetchone()
-        db.close()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             _clear_attempts(ip)
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["display_name"] = user["display_name"] or user["username"]
             session["role"] = user["role"] or "admin"
+            log_activity(db, "angemeldet", "Login", user["id"], user["username"], f"IP: {ip}")
+            db.commit()
+            db.close()
             dest = url_for("dashboard")
             resp = make_response(redirect(dest))
             resp.set_cookie("last_uid",          str(user["id"]),                          max_age=30*24*3600)
             resp.set_cookie("last_display_name", user["display_name"] or user["username"], max_age=30*24*3600)
             return resp
         _record_attempt(ip)
+        log_activity(db, "Anmeldung fehlgeschlagen", "Login", None,
+                     request.form.get("username", "")[:80], f"IP: {ip}")
+        db.commit()
+        db.close()
         flash("Falscher Benutzername oder Passwort", "error")
     return render_template("login.html")
 
 
 @app.route("/logout")
 def logout():
+    if session.get("user_id"):
+        db = get_db()
+        log_activity(db, "abgemeldet", "Login", session.get("user_id"), session.get("username"))
+        db.commit()
+        db.close()
     session.clear()
     return redirect(url_for("login"))
 
@@ -604,6 +615,27 @@ def _customer_fields(form):
     )
 
 
+_CUSTOMER_FIELD_COLS = (
+    "customer_number", "company", "legal_form", "name", "email", "phone", "website",
+    "street", "zip", "city", "country", "tax_id", "payment_terms",
+    "contact_person", "contact_position", "contact_email", "contact_phone", "contact_mobile",
+    "contract_type", "support_level", "contract_start", "contract_end", "monthly_rate",
+    "num_workstations", "num_servers", "it_notes", "source", "notes", "status",
+)
+
+
+def _diff_fields(old_row, new_values, cols):
+    """Human-readable list of changed fields for the audit log."""
+    changes = []
+    for col, new in zip(cols, new_values):
+        old = old_row[col] if old_row else None
+        if str(old if old is not None else "") != str(new if new is not None else ""):
+            old_s = str(old)[:60] if old not in (None, "") else "leer"
+            new_s = str(new)[:60] if new not in (None, "") else "leer"
+            changes.append(f"{col}: {old_s} → {new_s}")
+    return "; ".join(changes)[:1500] if changes else None
+
+
 @app.route("/customers/new", methods=["GET", "POST"])
 @login_required
 def customer_new():
@@ -641,7 +673,8 @@ def customer_edit(cid):
             contract_type=%s,support_level=%s,contract_start=%s,contract_end=%s,monthly_rate=%s,
             num_workstations=%s,num_servers=%s,it_notes=%s,source=%s,notes=%s,status=%s
             WHERE id=%s""", (*fields, cid))
-        log_activity(db, "bearbeitet", "Kunde", cid, fields[3])
+        log_activity(db, "bearbeitet", "Kunde", cid, fields[3],
+                     _diff_fields(customer, fields, _CUSTOMER_FIELD_COLS))
         db.commit()
         db.close()
         flash("Kunde gespeichert", "success")
@@ -2176,6 +2209,9 @@ def activity_log():
 
     entity_type = request.args.get("entity_type", "")
     username    = request.args.get("username", "")
+    q           = request.args.get("q", "").strip()
+    date_from   = request.args.get("date_from", "")
+    date_to     = request.args.get("date_to", "")
     page        = max(int(request.args.get("page", 1) or 1), 1)
     per_page    = 50
 
@@ -2187,6 +2223,16 @@ def activity_log():
     if username:
         where.append("username = %s")
         params.append(username)
+    if q:
+        where.append("(entity_label ILIKE %s OR details ILIKE %s OR action ILIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like])
+    if date_from:
+        where.append("created_at >= %s")
+        params.append(date_from)
+    if date_to:
+        where.append("created_at < %s::date + INTERVAL '1 day'")
+        params.append(date_to)
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     total = db.execute(f"SELECT COUNT(*) FROM audit_log {where_sql}", params).fetchone()[0]
@@ -2203,6 +2249,7 @@ def activity_log():
     db.close()
     return render_template("activity_log.html", rows=rows, entity_types=entity_types,
                            usernames=usernames, entity_type=entity_type, username=username,
+                           q=q, date_from=date_from, date_to=date_to,
                            page=page, total=total, per_page=per_page)
 
 

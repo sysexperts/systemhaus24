@@ -25,7 +25,14 @@
     <option value="{{ u }}" {% if u == username %}selected{% endif %}>{{ u }}</option>
     {% endfor %}
   </select>
-  {% if entity_type or username %}
+  <input name="q" value="{{ q }}" type="text" placeholder="Suche in Objekt/Details…"
+         class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400 w-52">
+  <input name="date_from" value="{{ date_from }}" type="date" title="Von"
+         class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+  <input name="date_to" value="{{ date_to }}" type="date" title="Bis"
+         class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+  <button class="bg-[#1c3461] text-white px-3 py-2 rounded-xl text-xs font-medium hover:bg-[#2a4a8a] transition-colors">Filtern</button>
+  {% if entity_type or username or q or date_from or date_to %}
   <a href="{{ url_for('activity_log') }}" class="text-xs text-gray-400 hover:text-gray-600">Filter zurücksetzen</a>
   {% endif %}
   <span class="text-xs text-gray-400 ml-auto">{{ total }} Einträge</span>
@@ -72,12 +79,12 @@
 {% if total > per_page %}
 <div class="flex items-center justify-center gap-2 mt-4">
   {% if page > 1 %}
-  <a href="{{ url_for('activity_log', page=page-1, entity_type=entity_type, username=username) }}"
+  <a href="{{ url_for('activity_log', page=page-1, entity_type=entity_type, username=username, q=q, date_from=date_from, date_to=date_to) }}"
      class="px-3 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">← Zurück</a>
   {% endif %}
   <span class="text-xs text-gray-400">Seite {{ page }} von {{ ((total - 1) // per_page) + 1 }}</span>
   {% if page * per_page < total %}
-  <a href="{{ url_for('activity_log', page=page+1, entity_type=entity_type, username=username) }}"
+  <a href="{{ url_for('activity_log', page=page+1, entity_type=entity_type, username=username, q=q, date_from=date_from, date_to=date_to) }}"
      class="px-3 py-1.5 rounded-lg text-xs bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Weiter →</a>
   {% endif %}
 </div>
