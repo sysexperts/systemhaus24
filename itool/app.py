@@ -2185,7 +2185,7 @@ def promoter_register(token):
         db.close()
         return render_template("promoter_register.html", error="Ungültiger oder bereits verwendeter Link.")
     # Token expires after 72 hours
-    created = datetime.strptime(tok["created_at"][:19], "%Y-%m-%d %H:%M:%S")
+    created = tok["created_at"] if isinstance(tok["created_at"], datetime) else datetime.strptime(str(tok["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
     if datetime.utcnow() - created > timedelta(hours=72):
         db.close()
         return render_template("promoter_register.html", error="Dieser Link ist abgelaufen (72h). Bitte neuen Link anfordern.")
