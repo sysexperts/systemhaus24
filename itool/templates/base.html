@@ -58,7 +58,34 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+
+  /* ─── Dark Mode: overrides the light utility classes (same pattern as accent) ─── */
+  html.dark body { background-color: #151a23; }
+  html.dark [class*="bg-white"] { background-color: #1e2530 !important; }
+  html.dark [class*="bg-gray-50"] { background-color: #262f3d !important; }
+  html.dark [class*="bg-gray-100"] { background-color: #2b3442 !important; }
+  html.dark [class*="bg-blue-50"] { background-color: #22304a !important; }
+  html.dark [class*="hover:bg-gray-50"]:hover,
+  html.dark [class*="hover:bg-gray-100"]:hover { background-color: #2b3442 !important; }
+  html.dark [class*="hover:bg-blue-50"]:hover { background-color: #22304a !important; }
+  html.dark [class*="text-gray-900"], html.dark [class*="text-gray-800"],
+  html.dark [class*="text-gray-700"] { color: #e4e9f1 !important; }
+  html.dark [class*="text-gray-600"], html.dark [class*="text-gray-500"] { color: #aeb8c8 !important; }
+  html.dark [class*="text-gray-400"], html.dark [class*="text-gray-300"] { color: #77839a !important; }
+  html.dark [class*="border-white"] { border-color: #2a3341 !important; }
+  html.dark [class*="border-gray-50"], html.dark [class*="border-gray-100"],
+  html.dark [class*="border-gray-200"], html.dark [class*="border-gray-300"],
+  html.dark [class*="border-blue-100"] { border-color: #313c4d !important; }
+  html.dark [class*="text-[#1c3461]"] { color: #9db8e8 !important; }
+  html.dark [class*="hover:text-[#1c3461]"]:hover { color: #bcd0f2 !important; }
+  html.dark input, html.dark textarea, html.dark select { color: #e4e9f1; }
+  html.dark input::placeholder, html.dark textarea::placeholder { color: #5f6b7f; }
+  html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
 </style>
+<script>
+  // Vor dem Rendern anwenden, damit es beim Laden nicht aufblitzt
+  if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
+</script>
 </head>
 <body class="{% if session.user_id %}flex h-screen overflow-hidden{% else %}min-h-screen{% endif %}">
 
@@ -93,6 +120,31 @@
       <span class="lbl text-sm text-white font-medium flex-1 text-left">Suche</span>
       <kbd class="lbl text-[10px] text-white/40 border border-white/20 rounded px-1.5 py-0.5">⌘K</kbd>
     </button>
+
+    <!-- Dark Mode -->
+    <button onclick="toggleDarkMode()" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl hover:bg-white/10 transition-colors mb-1 w-[calc(100%-16px)]">
+      <svg id="dm-icon-moon" class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+      <svg id="dm-icon-sun" class="w-5 h-5 text-white shrink-0 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+      </svg>
+      <span id="dm-label" class="lbl text-sm text-white font-medium flex-1 text-left">Dark Mode</span>
+    </button>
+    <script>
+      function toggleDarkMode() {
+        const dark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', dark ? 'dark' : 'light');
+        syncDarkModeUi();
+      }
+      function syncDarkModeUi() {
+        const dark = document.documentElement.classList.contains('dark');
+        document.getElementById('dm-icon-moon').classList.toggle('hidden', dark);
+        document.getElementById('dm-icon-sun').classList.toggle('hidden', !dark);
+        document.getElementById('dm-label').textContent = dark ? 'Light Mode' : 'Dark Mode';
+      }
+      syncDarkModeUi();
+    </script>
 
     <!-- Dashboard -->
     <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if request.endpoint=='dashboard' %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
