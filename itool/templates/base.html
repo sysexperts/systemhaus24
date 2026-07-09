@@ -772,7 +772,7 @@ const _shownNotifs = new Set();
 function showNotifToast(n) {
   if (_shownNotifs.has(n.id)) return;
   _shownNotifs.add(n.id);
-  playNotifSound(n.type);
+  if (n.sound !== '0') playNotifSound(n.type);
 
   const toast = document.createElement('div');
   toast.className = 'fixed bottom-6 right-6 z-[9999] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden';
