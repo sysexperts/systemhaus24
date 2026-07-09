@@ -226,7 +226,7 @@ def login_required(f):
 
 
 # CSRF check for all state-changing requests from logged-in users
-_CSRF_EXEMPT = {"login", "promoter_register", "static"}
+_CSRF_EXEMPT = {"login", "promoter_register", "referral_landing", "static"}
 
 @app.before_request
 def enforce_csrf_and_session():
@@ -2936,6 +2936,60 @@ def promoter_payout_decide(poid):
 
 # ── Promoter-eigenes Dashboard ─────────────────────────────────────────────────
 
+# ------------------------------------------------------------ Referral-Links
+
+def _get_or_create_referral(pid, db):
+    row = db.execute("SELECT * FROM referral_links WHERE promoter_id=%s", (pid,)).fetchone()
+    if row:
+        return row
+    code = secrets.token_urlsafe(6)
+    while db.execute("SELECT 1 FROM referral_links WHERE code=%s", (code,)).fetchone():
+        code = secrets.token_urlsafe(6)
+    db.execute("INSERT INTO referral_links (promoter_id, code) VALUES (%s,%s)", (pid, code))
+    db.commit()
+    return db.execute("SELECT * FROM referral_links WHERE promoter_id=%s", (pid,)).fetchone()
+
+
+@app.route("/r/<code>", methods=["GET", "POST"])
+def referral_landing(code):
+    db = get_db()
+    ref = db.execute("""SELECT r.*, u.display_name, u.username FROM referral_links r
+                        JOIN users u ON u.id = r.promoter_id WHERE r.code=%s""", (code,)).fetchone()
+    if not ref:
+        db.close()
+        abort(404)
+    cfg = get_settings(db)
+    if request.method == "POST":
+        name    = request.form.get("name", "").strip()
+        company = request.form.get("company", "").strip()
+        email_a = request.form.get("email", "").strip()
+        phone   = request.form.get("phone", "").strip()
+        message = request.form.get("message", "").strip()
+        if not name or not (email_a or phone):
+            db.close()
+            return render_template("referral_landing.html", ref=ref, cfg=cfg,
+                                   error="Bitte Name und E-Mail oder Telefon angeben.", sent=False)
+        db.execute("""INSERT INTO referral_leads (referral_id, name, company, email, phone, message)
+                      VALUES (%s,%s,%s,%s,%s,%s)""",
+                   (ref["id"], name, company, email_a, phone, message))
+        promoter_name = ref["display_name"] or ref["username"]
+        db.execute("""INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes)
+                      VALUES (%s,%s,%s,%s,%s,%s)""",
+                   (company or None, name, email_a or None, phone or None, "Empfehlung",
+                    f"Über Referral-Link von {promoter_name}." + (f"\n\nNachricht: {message}" if message else "")))
+        db.execute("INSERT INTO notifications (type, title, body, link) VALUES (%s,%s,%s,%s)",
+                   ("promoter_register", "Neue Empfehlung eingegangen",
+                    f"{name}{' (' + company + ')' if company else ''} über Referral-Link von {promoter_name}.",
+                    "/akquise"))
+        db.commit()
+        db.close()
+        return render_template("referral_landing.html", ref=ref, cfg=cfg, error=None, sent=True)
+    db.execute("UPDATE referral_links SET clicks = clicks + 1 WHERE id=%s", (ref["id"],))
+    db.commit()
+    db.close()
+    return render_template("referral_landing.html", ref=ref, cfg=cfg, error=None, sent=False)
+
+
 @app.route("/promoter")
 @login_required
 def promoter_dashboard():
@@ -2971,10 +3025,15 @@ def promoter_dashboard():
     total_paid    = sum(p["amount"] for p in payouts if p["status"] == "approved")
     total_pending = sum(p["amount"] for p in payouts if p["status"] == "pending")
     balance       = total_earned - total_paid - total_pending
+    referral = _get_or_create_referral(pid, db)
+    referral_leads = db.execute(
+        "SELECT * FROM referral_leads WHERE referral_id=%s ORDER BY created_at DESC LIMIT 20",
+        (referral["id"],)).fetchall()
     db.close()
     return render_template("promoter_dashboard.html",
                            commissions=commissions, payouts=payouts,
                            assignments=assignments,
+                           referral=referral, referral_leads=referral_leads,
                            total_earned=total_earned, total_paid=total_paid,
                            total_pending=total_pending, balance=balance)
 

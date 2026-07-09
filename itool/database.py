@@ -360,6 +360,24 @@ def init_db():
             pref_value TEXT NOT NULL DEFAULT '1',
             PRIMARY KEY (user_id, pref_key)
         )""",
+        """CREATE TABLE IF NOT EXISTS referral_links (
+            id SERIAL PRIMARY KEY,
+            promoter_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            code TEXT UNIQUE NOT NULL,
+            clicks INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS referral_leads (
+            id SERIAL PRIMARY KEY,
+            referral_id INTEGER NOT NULL REFERENCES referral_links(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            company TEXT,
+            email TEXT,
+            phone TEXT,
+            message TEXT,
+            status TEXT DEFAULT 'new',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
         """CREATE TABLE IF NOT EXISTS quotes (
             id SERIAL PRIMARY KEY,
             number TEXT UNIQUE NOT NULL,
