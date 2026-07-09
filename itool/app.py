@@ -1510,6 +1510,31 @@ def api_counts():
     return jsonify(tickets=tickets, invoices=invoices)
 
 
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    if session.get("role") != "admin":
+        return jsonify([])
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, type, title, body, link FROM notifications WHERE is_read=0 ORDER BY created_at DESC LIMIT 10"
+    ).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/notifications/<int:nid>/read", methods=["POST"])
+@login_required
+def api_notification_read(nid):
+    if session.get("role") != "admin":
+        return jsonify(ok=False)
+    db = get_db()
+    db.execute("UPDATE notifications SET is_read=1 WHERE id=%s", (nid,))
+    db.commit()
+    db.close()
+    return jsonify(ok=True)
+
+
 @app.route("/api/search")
 @login_required
 def api_search():
@@ -2206,6 +2231,11 @@ def promoter_register(token):
             (username, phash, display or username, "promoter")).fetchone()["id"]
         db.execute("UPDATE promoter_tokens SET used_by=%s, used_at=CURRENT_TIMESTAMP WHERE id=%s",
                    (new_uid, tok["id"]))
+        db.execute(
+            "INSERT INTO notifications (type, title, body, link) VALUES (%s,%s,%s,%s)",
+            ("promoter_register", "Neuer Promoter registriert",
+             f"{display or username} hat sich als Promoter registriert.",
+             f"/promoters/{new_uid}"))
         db.commit()
         db.close()
         flash("Registrierung erfolgreich – bitte anmelden.", "success")

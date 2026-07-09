@@ -640,6 +640,83 @@ document.addEventListener('keydown', e => {
     if (modal && !modal.classList.contains('hidden')) closeSearch();
   }
 });
+
+{% if session.get('role') == 'admin' %}
+// ── Promoter-Benachrichtigungen ─────────────────────────────────────────────
+const _shownNotifs = new Set();
+
+function showNotifToast(n) {
+  if (_shownNotifs.has(n.id)) return;
+  _shownNotifs.add(n.id);
+
+  const toast = document.createElement('div');
+  toast.className = 'fixed bottom-6 right-6 z-[9999] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden';
+  toast.style.cssText = 'animation: slideInRight .35s cubic-bezier(.21,1.02,.73,1) forwards';
+  toast.innerHTML = `
+    <div class="flex items-start gap-3 p-4">
+      <div class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" style="background:var(--accent)">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-gray-900">${esc(n.title)}</p>
+        <p class="text-xs text-gray-500 mt-0.5">${esc(n.body)}</p>
+        ${n.link ? `<a href="${n.link}" class="text-xs font-medium mt-1.5 inline-block" style="color:var(--accent)">Zum Promoter →</a>` : ''}
+      </div>
+      <button onclick="dismissNotif(${n.id}, this.closest('div.fixed'))"
+        class="shrink-0 text-gray-300 hover:text-gray-500 transition-colors ml-1">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="h-1 w-full" style="background:var(--accent);opacity:.25">
+      <div class="h-full" style="background:var(--accent);animation:shrinkBar 8s linear forwards" id="bar-${n.id}"></div>
+    </div>`;
+  document.body.appendChild(toast);
+
+  setTimeout(() => dismissNotif(n.id, toast), 8000);
+}
+
+function dismissNotif(id, el) {
+  if (!el || !el.parentNode) return;
+  el.style.animation = 'slideOutRight .3s ease forwards';
+  setTimeout(() => el.remove(), 300);
+  fetch(`/api/notifications/${id}/read`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+    body: new FormData(Object.assign(document.createElement('form'), {innerHTML: '<input name="_csrf_token" value="{{ csrf_token() }}">'}))
+  }).catch(() => {});
+}
+
+async function pollNotifications() {
+  try {
+    const res = await fetch('/api/notifications');
+    if (!res.ok) return;
+    const items = await res.json();
+    items.forEach(showNotifToast);
+  } catch(_) {}
+}
+
+pollNotifications();
+setInterval(pollNotifications, 30000);
+{% endif %}
 </script>
+
+<style>
+@keyframes slideInRight {
+  from { opacity:0; transform: translateX(110%) }
+  to   { opacity:1; transform: translateX(0) }
+}
+@keyframes slideOutRight {
+  to { opacity:0; transform: translateX(110%) }
+}
+@keyframes shrinkBar {
+  from { width:100% }
+  to   { width:0% }
+}
+</style>
 </body>
 </html>
