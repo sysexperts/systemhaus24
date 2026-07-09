@@ -360,6 +360,24 @@ def init_db():
             pref_value TEXT NOT NULL DEFAULT '1',
             PRIMARY KEY (user_id, pref_key)
         )""",
+        """CREATE TABLE IF NOT EXISTS quotes (
+            id SERIAL PRIMARY KEY,
+            number TEXT UNIQUE NOT NULL,
+            customer_id INTEGER NOT NULL REFERENCES customers(id),
+            date TEXT NOT NULL,
+            valid_until TEXT,
+            status TEXT DEFAULT 'draft',
+            notes TEXT,
+            invoice_id INTEGER REFERENCES invoices(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS quote_items (
+            id SERIAL PRIMARY KEY,
+            quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+            description TEXT NOT NULL,
+            quantity REAL DEFAULT 1,
+            unit_price REAL NOT NULL
+        )""",
         """CREATE TABLE IF NOT EXISTS dunning_notices (
             id SERIAL PRIMARY KEY,
             invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,

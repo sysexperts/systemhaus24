@@ -1070,6 +1070,221 @@ def dunning_send(iid, level):
     return redirect(url_for("dunning_list"))
 
 
+# ------------------------------------------------------------------ Angebote
+
+QUOTE_STATUS_LABELS = {"draft": "Entwurf", "sent": "Gesendet", "accepted": "Angenommen",
+                       "rejected": "Abgelehnt", "invoiced": "Abgerechnet"}
+
+
+def next_quote_number():
+    db = get_db()
+    row = db.execute("SELECT number FROM quotes ORDER BY id DESC LIMIT 1").fetchone()
+    db.close()
+    if not row:
+        return f"AN-{date.today().year}-001"
+    try:
+        num = int(row["number"].split("-")[-1]) + 1
+        return f"AN-{date.today().year}-{num:03d}"
+    except Exception:
+        return f"AN-{date.today().year}-001"
+
+
+@app.route("/angebote")
+@login_required
+def quotes():
+    db = get_db()
+    rows = db.execute("""
+        SELECT q.*, c.name as customer_name, c.company,
+               COALESCE((SELECT SUM(quantity*unit_price) FROM quote_items WHERE quote_id=q.id),0) as total
+        FROM quotes q JOIN customers c ON q.customer_id=c.id
+        ORDER BY q.created_at DESC
+    """).fetchall()
+    db.close()
+    return render_template("quotes.html", quotes=rows, status_labels=QUOTE_STATUS_LABELS)
+
+
+@app.route("/angebote/new", methods=["GET", "POST"])
+@login_required
+def quote_new():
+    db = get_db()
+    if request.method == "POST":
+        number = next_quote_number()
+        qid = db.execute("""INSERT INTO quotes (number, customer_id, date, valid_until, status, notes)
+                            VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+                         (number, request.form["customer_id"], request.form["date"],
+                          request.form.get("valid_until") or None, request.form["status"],
+                          request.form["notes"])).fetchone()["id"]
+        for desc, qty, price in zip(request.form.getlist("desc[]"),
+                                    request.form.getlist("qty[]"),
+                                    request.form.getlist("price[]")):
+            if desc.strip():
+                db.execute("INSERT INTO quote_items (quote_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
+                           (qid, desc, float(qty), float(price)))
+        log_activity(db, "erstellt", "Angebot", qid, number)
+        db.commit()
+        db.close()
+        flash(f"Angebot {number} erstellt", "success")
+        return redirect(url_for("quotes"))
+    customers = db.execute("SELECT * FROM customers ORDER BY name").fetchall()
+    articles  = db.execute("SELECT * FROM articles WHERE active=1 ORDER BY category, name").fetchall()
+    cfg = get_settings(db)
+    db.close()
+    default_valid = (date.today() + timedelta(days=30)).isoformat()
+    return render_template("quote_form.html", customers=customers, articles=articles, cfg=cfg,
+                           today=date.today().isoformat(), valid_until=default_valid,
+                           number=next_quote_number())
+
+
+@app.route("/angebote/<int:qid>")
+@login_required
+def quote_view(qid):
+    db = get_db()
+    quote = db.execute("""SELECT q.*, c.name as customer_name, c.company, c.street, c.zip, c.city,
+                                 c.email as customer_email, c.tax_id as customer_tax_id
+                          FROM quotes q JOIN customers c ON q.customer_id=c.id WHERE q.id=%s""", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
+    total = sum(it["quantity"] * it["unit_price"] for it in items)
+    cfg = get_settings(db)
+    db.close()
+    return render_template("quote_view.html", quote=quote, items=items, total=total, cfg=cfg,
+                           status_labels=QUOTE_STATUS_LABELS)
+
+
+def generate_quote_pdf_bytes(qid, db):
+    from io import BytesIO
+    from xhtml2pdf import pisa
+    quote = db.execute("""SELECT q.*, c.name as customer_name, c.company as customer_company,
+                                 c.street, c.zip, c.city, c.tax_id as customer_tax_id
+                          FROM quotes q JOIN customers c ON q.customer_id=c.id WHERE q.id=%s""", (qid,)).fetchone()
+    items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
+    total = sum(it["quantity"] * it["unit_price"] for it in items)
+    cfg   = get_settings(db)
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    html_str = render_template("quote_pdf.html", quote=quote, items=items, total=total, cfg=cfg,
+                               doc_store=data_dir)
+    buf = BytesIO()
+    pisa.CreatePDF(html_str.encode("utf-8"), dest=buf)
+    return buf.getvalue()
+
+
+@app.route("/angebote/<int:qid>/pdf")
+@login_required
+def quote_pdf(qid):
+    db = get_db()
+    quote = db.execute("SELECT number FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    try:
+        pdf = generate_quote_pdf_bytes(qid, db)
+    finally:
+        db.close()
+    from flask import Response
+    disposition = "inline" if request.args.get("inline") else "attachment"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'{disposition}; filename="Angebot_{quote["number"]}.pdf"'})
+
+
+@app.route("/angebote/<int:qid>/send-email", methods=["POST"])
+@login_required
+def quote_send_email(qid):
+    db = get_db()
+    quote = db.execute("""SELECT q.*, c.name as customer_name, c.email as customer_email
+                          FROM quotes q JOIN customers c ON q.customer_id=c.id WHERE q.id=%s""", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    to_addr = request.form.get("to_email", "").strip() or (quote["customer_email"] or "")
+    if not to_addr:
+        flash("Keine E-Mail-Adresse angegeben", "error")
+        db.close()
+        return redirect(url_for("quote_view", qid=qid))
+    try:
+        cfg = get_settings(db)
+        subject = request.form.get("subject", f"Angebot {quote['number']}").strip()
+        body = request.form.get("body", "").strip() or (
+            f"Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unser Angebot {quote['number']}.\n\n"
+            f"Mit freundlichen Grüßen\n{cfg.get('company_name','')}")
+        pdf_bytes = generate_quote_pdf_bytes(qid, db)
+        _smtp_send_pdf(cfg, to_addr, subject, body, pdf_bytes, f"Angebot_{quote['number']}.pdf")
+        if quote["status"] == "draft":
+            db.execute("UPDATE quotes SET status='sent' WHERE id=%s", (qid,))
+        log_activity(db, "versendet", "Angebot", qid, quote["number"], f"per E-Mail an {to_addr}")
+        db.commit()
+        flash(f"Angebot als PDF an {to_addr} gesendet ✓", "success")
+    except Exception as e:
+        flash(f"E-Mail-Fehler: {e}", "error")
+    db.close()
+    return redirect(url_for("quote_view", qid=qid))
+
+
+@app.route("/angebote/<int:qid>/status/<status>", methods=["POST"])
+@login_required
+def quote_status(qid, status):
+    if status not in QUOTE_STATUS_LABELS:
+        abort(400)
+    db = get_db()
+    quote = db.execute("SELECT number FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    db.execute("UPDATE quotes SET status=%s WHERE id=%s", (status, qid))
+    log_activity(db, "Status geändert", "Angebot", qid, quote["number"], f"neuer Status: {QUOTE_STATUS_LABELS[status]}")
+    db.commit()
+    db.close()
+    flash(f"Status: {QUOTE_STATUS_LABELS[status]}", "success")
+    return redirect(url_for("quote_view", qid=qid))
+
+
+@app.route("/angebote/<int:qid>/delete", methods=["POST"])
+@login_required
+def quote_delete(qid):
+    db = get_db()
+    quote = db.execute("SELECT number, status FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    db.execute("DELETE FROM quotes WHERE id=%s", (qid,))
+    log_activity(db, "gelöscht", "Angebot", qid, quote["number"])
+    db.commit()
+    db.close()
+    flash(f"Angebot {quote['number']} gelöscht", "success")
+    return redirect(url_for("quotes"))
+
+
+@app.route("/angebote/<int:qid>/to-invoice", methods=["POST"])
+@login_required
+def quote_to_invoice(qid):
+    db = get_db()
+    quote = db.execute("SELECT * FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    if quote["invoice_id"]:
+        flash("Angebot wurde bereits abgerechnet", "error")
+        db.close()
+        return redirect(url_for("quote_view", qid=qid))
+    items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
+    number = next_invoice_number()
+    due = (date.today() + timedelta(days=14)).isoformat()
+    inv_id = db.execute("""INSERT INTO invoices (number, customer_id, date, due_date, status, notes)
+                           VALUES (%s,%s,%s,%s,'draft',%s) RETURNING id""",
+                        (number, quote["customer_id"], date.today().isoformat(), due,
+                         f"Basierend auf Angebot {quote['number']}")).fetchone()["id"]
+    for it in items:
+        db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
+                   (inv_id, it["description"], it["quantity"], it["unit_price"]))
+    db.execute("UPDATE quotes SET status='invoiced', invoice_id=%s WHERE id=%s", (inv_id, qid))
+    log_activity(db, "umgewandelt", "Angebot", qid, quote["number"], f"in Rechnung {number}")
+    db.commit()
+    db.close()
+    flash(f"Rechnung {number} aus Angebot {quote['number']} erstellt", "success")
+    return redirect(url_for("invoice_view", iid=inv_id))
+
+
 #  Sobald eine Rechnung tatsaechlich versendet oder bezahlt wurde, gilt sie als
 #  ausgestellt und darf laut GoBD nicht mehr geloescht oder "rueckgaengig" auf
 #  Entwurf gesetzt werden (fortlaufende, lueckenlose Rechnungsnummerierung).

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Angebote – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Angebote</h1>
+  <a href="{{ url_for('quote_new') }}"
+     class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+    + Neues Angebot
+  </a>
+</div>
+
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm" style="min-width:640px;">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Nummer</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kunde</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Datum</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Gültig bis</th>
+        <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Betrag</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for q in quotes %}
+    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors cursor-pointer"
+        onclick="window.location='{{ url_for('quote_view', qid=q.id) }}'">
+      <td class="px-5 py-3 font-mono text-xs text-gray-600 font-medium">{{ q.number }}</td>
+      <td class="px-5 py-3">
+        <div class="font-medium text-gray-800">{{ q.customer_name }}</div>
+        {% if q.company %}<div class="text-xs text-gray-400">{{ q.company }}</div>{% endif %}
+      </td>
+      <td class="px-5 py-3 text-gray-500 text-xs">{{ q.date }}</td>
+      <td class="px-5 py-3 text-gray-500 text-xs">{{ q.valid_until or '–' }}</td>
+      <td class="px-5 py-3 text-right font-semibold text-gray-800">{{ "%.2f"|format(brutto(q.total)) }} €</td>
+      <td class="px-5 py-3">
+        <span class="px-2.5 py-1 rounded-full text-xs font-medium
+          {% if q.status=='accepted' %}bg-green-100 text-green-700
+          {% elif q.status=='sent' %}bg-blue-100 text-blue-700
+          {% elif q.status=='rejected' %}bg-red-100 text-red-600
+          {% elif q.status=='invoiced' %}bg-purple-100 text-purple-700
+          {% else %}bg-gray-100 text-gray-500{% endif %}">
+          {{ status_labels.get(q.status, q.status) }}
+        </span>
+      </td>
+      <td class="px-5 py-3 text-right" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-end gap-3">
+          <a href="{{ url_for('quote_view', qid=q.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Ansehen</a>
+          {% if q.status in ('draft','rejected') %}
+          <form method="POST" action="{{ url_for('quote_delete', qid=q.id) }}" onsubmit="return confirm('Angebot löschen?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
+          </form>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="px-5 py-12 text-center text-gray-400">Noch keine Angebote.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% endblock %}

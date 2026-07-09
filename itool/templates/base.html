@@ -122,6 +122,14 @@
       </div>
     </div>
 
+    <!-- Angebote -->
+    <a href="{{ url_for('quotes') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if 'quote' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
+      <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+      </svg>
+      <span class="lbl text-sm text-white font-medium">Angebote</span>
+    </a>
+
     <!-- Rechnungen -->
     <div class="mx-2 mb-1">
       <button onclick="toggleMenu('menu-inv', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'invoice' in (request.endpoint or '') or 'recurring' in (request.endpoint or '') or 'dunning' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors relative">
