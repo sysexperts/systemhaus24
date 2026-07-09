@@ -649,7 +649,12 @@ document.addEventListener('keydown', e => {
 
 // ── @Mention Autocomplete ────────────────────────────────────────────────────
 let _allUsers = [];
-fetch('/api/users').then(r => r.json()).then(u => { _allUsers = u; }).catch(() => {});
+let _usersFetched = false;
+function fetchUsers() {
+  if (_usersFetched) return Promise.resolve();
+  _usersFetched = true;
+  return fetch('/api/users').then(r => r.json()).then(u => { _allUsers = u; }).catch(() => { _usersFetched = false; });
+}
 
 (function() {
   const input = document.getElementById('feed-input');
@@ -658,37 +663,45 @@ fetch('/api/users').then(r => r.json()).then(u => { _allUsers = u; }).catch(() =
 
   let _mentionStart = -1;
 
+  function showDropdown(matches) {
+    dropdown.innerHTML = matches.map(u => `
+      <button type="button" data-username="${u.username}"
+        style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;background:none;border:none;cursor:pointer;text-align:left;"
+        onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'">
+        <span style="font-weight:600;color:#111">${esc(u.display_name || u.username)}</span>
+        <span style="font-size:11px;color:#9ca3af">@${esc(u.username)}</span>
+      </button>`).join('');
+    dropdown.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('mousedown', e => { e.preventDefault(); insertMention(btn.dataset.username); });
+    });
+    dropdown.style.display = 'block';
+  }
+
+  function closeMentionDropdown() {
+    dropdown.style.display = 'none';
+    dropdown.innerHTML = '';
+  }
+
   input.addEventListener('input', () => {
     const val = input.value;
     const pos = input.selectionStart;
-    // find the last @ before cursor
     const before = val.slice(0, pos);
     const m = before.match(/@(\w*)$/);
     if (!m) { closeMentionDropdown(); return; }
     _mentionStart = before.lastIndexOf('@');
     const query = m[1].toLowerCase();
-    const matches = _allUsers.filter(u =>
-      u.username.toLowerCase().includes(query) ||
-      (u.display_name || '').toLowerCase().includes(query)
-    ).slice(0, 6);
-    if (!matches.length) { closeMentionDropdown(); return; }
-    dropdown.innerHTML = matches.map(u => `
-      <button type="button" data-username="${u.username}"
-        class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 transition-colors text-left">
-        <span class="font-medium text-gray-800">${esc(u.display_name || u.username)}</span>
-        <span class="text-xs text-gray-400">@${esc(u.username)}</span>
-      </button>`).join('');
-    dropdown.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('mousedown', e => {
-        e.preventDefault();
-        insertMention(btn.dataset.username);
-      });
+    fetchUsers().then(() => {
+      const matches = _allUsers.filter(u =>
+        u.username.toLowerCase().includes(query) ||
+        (u.display_name || '').toLowerCase().includes(query)
+      ).slice(0, 6);
+      if (!matches.length) { closeMentionDropdown(); return; }
+      showDropdown(matches);
     });
-    dropdown.classList.remove('hidden');
   });
 
   input.addEventListener('keydown', e => {
-    if (dropdown.classList.contains('hidden')) return;
+    if (dropdown.style.display === 'none') return;
     const btns = [...dropdown.querySelectorAll('button')];
     const focused = dropdown.querySelector('button:focus');
     const idx = focused ? btns.indexOf(focused) : -1;

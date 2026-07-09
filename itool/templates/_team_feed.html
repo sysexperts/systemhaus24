@@ -22,17 +22,19 @@
   <div class="p-3 border-t border-gray-300/40 bg-white/5">
     <form method="POST" action="{{ url_for('feed_send') }}" enctype="multipart/form-data" id="feed-form" onsubmit="return ajaxFeedSubmit(event)">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <!-- @mention autocomplete -->
-      <div id="mention-dropdown" class="hidden mb-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-40 overflow-y-auto"></div>
-      <div class="flex gap-2 mb-2">
-        <input name="body" id="feed-input" placeholder="Nachricht schreiben… (@Name erwähnen)" autocomplete="off"
+      <div class="relative mb-2">
+        <div id="mention-dropdown"
+             style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;z-index:9999;background:white;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:160px;overflow-y:auto;"></div>
+        <div class="flex gap-2">
+        <input name="body" id="feed-input" placeholder="Nachricht schreiben… (@Name)" autocomplete="off"
                class="flex-1 bg-white/80 border border-gray-300/60 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
         <button type="submit" class="bg-[#1c3461] text-white px-3 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
           </svg>
         </button>
-      </div>
+        </div><!-- end flex gap-2 -->
+      </div><!-- end relative mb-2 -->
       <label class="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-600">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
         <span id="file-label">Anhang hinzufügen</span>
