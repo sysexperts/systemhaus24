@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Mahnwesen – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Mahnwesen</h1>
+</div>
+
+<!-- Überfällige Rechnungen -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden mb-6">
+  <div class="px-5 py-3 border-b border-gray-100">
+    <span class="text-sm font-semibold text-gray-700">Überfällige Rechnungen</span>
+    <span class="ml-2 text-xs text-gray-400">{{ invoices|length }} offen</span>
+  </div>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm" style="min-width:760px;">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Nummer</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kunde</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Fällig seit</th>
+        <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Betrag</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Mahnstufe</th>
+        <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for inv in invoices %}
+    {% set next_level = inv.dunning_level + 1 if inv.dunning_level < 3 else 3 %}
+    <tr class="border-b border-gray-50 hover:bg-red-50/30 transition-colors">
+      <td class="px-5 py-3 font-mono text-xs text-gray-600 font-medium">
+        <a href="{{ url_for('invoice_view', iid=inv.id) }}" class="hover:underline">{{ inv.number }}</a>
+      </td>
+      <td class="px-5 py-3">
+        <div class="font-medium text-gray-800">{{ inv.customer_name }}</div>
+        {% if inv.company %}<div class="text-xs text-gray-400">{{ inv.company }}</div>{% endif %}
+      </td>
+      <td class="px-5 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold
+          {% if inv.overdue_days > 30 %}bg-red-100 text-red-700
+          {% elif inv.overdue_days > 14 %}bg-orange-100 text-orange-700
+          {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+          {{ inv.overdue_days }} Tage
+        </span>
+        <div class="text-[10px] text-gray-400 mt-0.5">{{ inv.due_date }}</div>
+      </td>
+      <td class="px-5 py-3 text-right font-semibold text-gray-800">{{ "%.2f"|format(brutto(inv.total)) }} €</td>
+      <td class="px-5 py-3">
+        {% if inv.dunning_level == 0 %}
+        <span class="text-xs text-gray-400">–</span>
+        {% else %}
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600">{{ levels[inv.dunning_level][0] }}</span>
+        {% if inv.last_dunning %}<div class="text-[10px] text-gray-400 mt-0.5">{{ inv.last_dunning.strftime('%d.%m.%Y') if inv.last_dunning.strftime else inv.last_dunning }}</div>{% endif %}
+        {% endif %}
+      </td>
+      <td class="px-5 py-3 text-right">
+        <div class="flex items-center justify-end gap-2">
+          <a href="{{ url_for('dunning_pdf', iid=inv.id, level=next_level) }}?inline=1" target="_blank"
+             class="text-gray-400 hover:text-[#1c3461] text-xs font-medium" title="PDF-Vorschau">PDF</a>
+          <form method="POST" action="{{ url_for('dunning_send', iid=inv.id, level=next_level) }}"
+                onsubmit="return confirm('{{ levels[next_level][0] }} für Rechnung {{ inv.number }} {% if inv.customer_email %}per E-Mail an {{ inv.customer_email }} senden{% else %}vermerken (keine Kunden-E-Mail hinterlegt){% endif %}?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            {% if inv.customer_email %}<input type="hidden" name="send_email" value="1">{% endif %}
+            <button class="bg-[#1c3461] text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-[#2a4a8a] transition-colors">
+              {{ levels[next_level][0] }} {% if inv.customer_email %}senden{% else %}vermerken{% endif %}
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="px-5 py-12 text-center text-gray-400">Keine überfälligen Rechnungen 🎉</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Mahnhistorie -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <div class="px-5 py-3 border-b border-gray-100">
+    <span class="text-sm font-semibold text-gray-700">Mahnhistorie</span>
+  </div>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm" style="min-width:640px;">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Datum</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Rechnung</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kunde</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Stufe</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Frist</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Versand</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Von</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in history %}
+    <tr class="border-b border-gray-50">
+      <td class="px-5 py-3 text-xs text-gray-500">{{ d.sent_at.strftime('%d.%m.%Y %H:%M') if d.sent_at.strftime else d.sent_at }}</td>
+      <td class="px-5 py-3 font-mono text-xs text-gray-600">
+        <a href="{{ url_for('invoice_view', iid=d.invoice_id) }}" class="hover:underline">{{ d.number }}</a>
+      </td>
+      <td class="px-5 py-3 text-gray-700">{{ d.company or d.customer_name }}</td>
+      <td class="px-5 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600">{{ levels[d.level][0] }}</span>
+      </td>
+      <td class="px-5 py-3 text-xs text-gray-500">{{ d.deadline or '–' }}</td>
+      <td class="px-5 py-3 text-xs">
+        {% if d.sent_via == 'email' %}
+        <span class="text-green-600 font-medium">✉ E-Mail</span>
+        {% else %}
+        <span class="text-gray-400">manuell</span>
+        {% endif %}
+      </td>
+      <td class="px-5 py-3 text-xs text-gray-500">{{ d.sent_by or '–' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="px-5 py-8 text-center text-gray-400">Noch keine Mahnungen versendet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -911,6 +911,165 @@ def invoice_send_email(iid):
     return redirect(url_for("invoice_view", iid=iid))
 
 
+# ------------------------------------------------------------------ Mahnwesen
+
+#  Stufe -> (Titel, Standard-Mahngebuehr, Zahlungsfrist in Tagen)
+DUNNING_LEVELS = {
+    1: ("Zahlungserinnerung", 0.0, 14),
+    2: ("1. Mahnung", 5.0, 10),
+    3: ("2. Mahnung", 10.0, 7),
+}
+
+
+def _smtp_send_pdf(cfg, to_addr, subject, body, pdf_bytes, pdf_name):
+    host       = cfg.get("smtp_host", "").strip()
+    port       = int(cfg.get("smtp_port", 587) or 587)
+    user       = cfg.get("smtp_user", "").strip()
+    pw         = cfg.get("smtp_pass", "")
+    from_name  = cfg.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+    from_email = (cfg.get("smtp_from_email", "") or user).strip()
+    if not host:
+        raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
+    msg = MIMEMultipart()
+    msg["From"]    = f"{from_name} <{from_email}>"
+    msg["To"]      = to_addr
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    pdf_part = MIMEBase("application", "pdf")
+    pdf_part.set_payload(pdf_bytes)
+    email_encoders.encode_base64(pdf_part)
+    pdf_part.add_header("Content-Disposition", f'attachment; filename="{pdf_name}"')
+    msg.attach(pdf_part)
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=20) as s:
+            s.login(user, pw)
+            s.sendmail(from_email, to_addr, msg.as_string())
+    else:
+        with smtplib.SMTP(host, port, timeout=20) as s:
+            s.ehlo(); s.starttls(); s.ehlo()
+            s.login(user, pw)
+            s.sendmail(from_email, to_addr, msg.as_string())
+
+
+def _dunning_context(iid, level, db):
+    invoice = db.execute("""SELECT i.*, c.name as customer_name, c.company as customer_company,
+                                   c.street, c.zip, c.city, c.email as customer_email, c.tax_id as customer_tax_id
+                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=%s""", (iid,)).fetchone()
+    if not invoice:
+        return None
+    items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=%s", (iid,)).fetchall()
+    total = sum(it["quantity"] * it["unit_price"] for it in items)
+    cfg   = get_settings(db)
+    kleingewerbe = cfg.get("company_kleingewerbe") == "1"
+    grand_total  = total if kleingewerbe else total * 1.19
+    title, fee, days = DUNNING_LEVELS[level]
+    deadline = (date.today() + timedelta(days=days)).strftime("%d.%m.%Y")
+    return {"invoice": invoice, "total": grand_total, "cfg": cfg, "level": level,
+            "title": title, "fee": fee, "deadline": deadline,
+            "amount_due": grand_total + fee}
+
+
+def generate_dunning_pdf_bytes(iid, level, db):
+    from io import BytesIO
+    from xhtml2pdf import pisa
+    ctx = _dunning_context(iid, level, db)
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    html_str = render_template("dunning_pdf.html", doc_store=data_dir, **ctx)
+    buf = BytesIO()
+    pisa.CreatePDF(html_str.encode("utf-8"), dest=buf)
+    return buf.getvalue()
+
+
+@app.route("/mahnwesen")
+@login_required
+def dunning_list():
+    db = get_db()
+    rows = db.execute("""
+        SELECT i.id, i.number, i.date, i.due_date, c.name as customer_name, c.company, c.email as customer_email,
+               COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as total,
+               (CURRENT_DATE - i.due_date::date) as overdue_days,
+               COALESCE((SELECT MAX(level) FROM dunning_notices WHERE invoice_id=i.id),0) as dunning_level,
+               (SELECT MAX(sent_at) FROM dunning_notices WHERE invoice_id=i.id) as last_dunning
+        FROM invoices i JOIN customers c ON i.customer_id=c.id
+        WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date != '' AND i.due_date::date < CURRENT_DATE
+        ORDER BY overdue_days DESC
+    """).fetchall()
+    history = db.execute("""
+        SELECT d.*, i.number, c.name as customer_name, c.company
+        FROM dunning_notices d JOIN invoices i ON d.invoice_id=i.id JOIN customers c ON i.customer_id=c.id
+        ORDER BY d.sent_at DESC LIMIT 50
+    """).fetchall()
+    cfg = get_settings(db)
+    db.close()
+    return render_template("dunning.html", invoices=rows, history=history,
+                           levels=DUNNING_LEVELS, cfg=cfg)
+
+
+@app.route("/invoices/<int:iid>/dunning/<int:level>/pdf")
+@login_required
+def dunning_pdf(iid, level):
+    if level not in DUNNING_LEVELS:
+        abort(404)
+    db = get_db()
+    invoice = db.execute("SELECT number FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not invoice:
+        db.close()
+        abort(404)
+    try:
+        pdf = generate_dunning_pdf_bytes(iid, level, db)
+    finally:
+        db.close()
+    from flask import Response
+    fname = f"{DUNNING_LEVELS[level][0].replace(' ', '_').replace('.', '')}_{invoice['number']}.pdf"
+    disposition = "inline" if request.args.get("inline") else "attachment"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'{disposition}; filename="{fname}"'})
+
+
+@app.route("/invoices/<int:iid>/dunning/<int:level>/send", methods=["POST"])
+@login_required
+def dunning_send(iid, level):
+    if level not in DUNNING_LEVELS:
+        abort(404)
+    db = get_db()
+    ctx = _dunning_context(iid, level, db)
+    if not ctx:
+        db.close()
+        abort(404)
+    invoice = ctx["invoice"]
+    title   = ctx["title"]
+    via     = "manual"
+    to_addr = (invoice["customer_email"] or "").strip()
+    send_mail = request.form.get("send_email") == "1" and to_addr
+    try:
+        if send_mail:
+            body = (f"Sehr geehrte Damen und Herren,\n\n"
+                    f"zur Rechnung {invoice['number']} vom {invoice['date']} konnten wir noch keinen "
+                    f"Zahlungseingang feststellen. Details entnehmen Sie bitte dem Anhang.\n\n"
+                    f"Bitte begleichen Sie den offenen Betrag von {ctx['amount_due']:.2f} EUR "
+                    f"bis zum {ctx['deadline']}.\n\n"
+                    f"Sollte sich Ihre Zahlung mit diesem Schreiben überschnitten haben, "
+                    f"betrachten Sie es bitte als gegenstandslos.\n\n"
+                    f"Mit freundlichen Grüßen\n{ctx['cfg'].get('company_name','')}")
+            pdf_bytes = generate_dunning_pdf_bytes(iid, level, db)
+            fname = f"{title.replace(' ', '_').replace('.', '')}_{invoice['number']}.pdf"
+            _smtp_send_pdf(ctx["cfg"], to_addr, f"{title} zur Rechnung {invoice['number']}",
+                           body, pdf_bytes, fname)
+            via = "email"
+        db.execute("INSERT INTO dunning_notices (invoice_id, level, fee, deadline, sent_by, sent_via) VALUES (%s,%s,%s,%s,%s,%s)",
+                   (iid, level, ctx["fee"], ctx["deadline"], session["username"], via))
+        log_activity(db, "erstellt", "Mahnung", iid, invoice["number"], f"{title}" + (f" per E-Mail an {to_addr}" if via == "email" else ""))
+        db.commit()
+        if via == "email":
+            flash(f"{title} per E-Mail an {to_addr} gesendet ✓", "success")
+        else:
+            flash(f"{title} vermerkt — PDF kann heruntergeladen werden", "success")
+    except Exception as e:
+        flash(f"Fehler beim Mahnversand: {e}", "error")
+    db.close()
+    return redirect(url_for("dunning_list"))
+
+
 #  Sobald eine Rechnung tatsaechlich versendet oder bezahlt wurde, gilt sie als
 #  ausgestellt und darf laut GoBD nicht mehr geloescht oder "rueckgaengig" auf
 #  Entwurf gesetzt werden (fortlaufende, lueckenlose Rechnungsnummerierung).

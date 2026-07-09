@@ -360,6 +360,16 @@ def init_db():
             pref_value TEXT NOT NULL DEFAULT '1',
             PRIMARY KEY (user_id, pref_key)
         )""",
+        """CREATE TABLE IF NOT EXISTS dunning_notices (
+            id SERIAL PRIMARY KEY,
+            invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+            level INTEGER NOT NULL,
+            fee REAL DEFAULT 0,
+            deadline TEXT,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_by TEXT,
+            sent_via TEXT DEFAULT 'manual'
+        )""",
     ]
 
     for sql in stmts:
