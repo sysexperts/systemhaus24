@@ -425,8 +425,10 @@ function highlightMentions(text) {
 
 function fmtMsgTime(ts) {
   if (!ts) return '';
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts.substring(11,16) || ts;
+  // "2026-07-09 14:23:45" → "2026-07-09T14:23:45" for reliable parsing
+  const iso = String(ts).replace(' ', 'T').replace(/\.\d+$/, '');
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(ts).substring(11,16) || ts;
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   const timeStr = d.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
