@@ -68,7 +68,7 @@
      class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-5 group block">
     <div class="flex items-center gap-3 mb-4">
       {% if p.avatar %}
-      <img src="{{ url_for('avatar', uid=p.id) }}" class="w-11 h-11 rounded-full object-cover border-2 border-gray-100">
+      <img src="{{ url_for('user_avatar', uid=p.id) }}" class="w-11 h-11 rounded-full object-cover border-2 border-gray-100">
       {% else %}
       <div class="w-11 h-11 rounded-full bg-[#1c3461] flex items-center justify-center text-white font-bold text-lg">
         {{ (p.display_name or p.username)[0].upper() }}
