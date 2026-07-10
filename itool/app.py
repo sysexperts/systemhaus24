@@ -2388,6 +2388,9 @@ app.jinja_env.globals["shade_hex"] = _shade_hex
 @login_required
 def settings():
     db = get_db()
+    if request.method == "POST" and session.get("role") != "admin":
+        db.close()
+        abort(403)
     if request.method == "POST":
         tab  = request.form.get("_tab", "")
         keys = SETTING_KEYS_BY_TAB.get(tab, sum(SETTING_KEYS_BY_TAB.values(), []))
@@ -2419,8 +2422,6 @@ def settings_notifications():
     db.commit()
     db.close()
     flash("Benachrichtigungseinstellungen gespeichert", "success")
-    if session.get("role") != "admin":
-        return redirect(url_for("profile"))
     return redirect(url_for("settings") + "#benachrichtigungen")
 
 
