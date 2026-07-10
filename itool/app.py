@@ -3518,6 +3518,31 @@ STAGE_KEYS = [s[0] for s in LEAD_STAGES]
 
 LEAD_SOURCES = ["Website", "Empfehlung", "Kaltakquise", "LinkedIn", "Messe", "Promoter", "Sonstiges"]
 
+#  Abschlusswahrscheinlichkeit je Phase — fuer den gewichteten Pipeline-Forecast
+STAGE_PROBABILITY = {"new": 0.10, "contacted": 0.25, "proposal": 0.50, "negotiation": 0.75}
+
+_HIGH_QUALITY_SOURCES = ("Empfehlung", "Promoter")
+
+
+def _score_lead(l, today_d):
+    """Regelbasierter Lead-Score 0-100: Deal-Wert, Phase, Quelle, Aktivität, Wiedervorlage."""
+    score = 0
+    v = l["deal_value"] or 0
+    if v >= 5000:  score += 25
+    elif v >= 1000: score += 18
+    elif v > 0:     score += 8
+    score += {"new": 5, "contacted": 15, "proposal": 28, "negotiation": 38}.get(l["stage"], 0)
+    if l["source"] in _HIGH_QUALITY_SOURCES:
+        score += 12
+    if l["next_followup"]:
+        score += 8
+    la = l["last_activity_at"]
+    if la:
+        la_d = la.date() if hasattr(la, "date") else None
+        if la_d and (today_d - la_d).days <= 7:
+            score += 17
+    return min(score, 100)
+
 
 @app.route("/akquise")
 @login_required
@@ -3530,34 +3555,98 @@ def akquise():
         FROM leads l ORDER BY l.updated_at DESC
     """).fetchall()
 
-    # KPIs
-    total       = len(leads)
-    won         = sum(1 for l in leads if l["stage"] == "won")
-    active      = sum(1 for l in leads if l["stage"] not in ("won", "lost"))
-    pipeline_val= sum(l["deal_value"] or 0 for l in leads if l["stage"] not in ("won", "lost"))
-    won_val     = sum(l["deal_value"] or 0 for l in leads if l["stage"] == "won")
-    conv_rate   = round(won / total * 100) if total else 0
+    today_d = date.today()
+    today   = today_d.isoformat()
 
-    # Group by stage for kanban
+    enriched = []
+    for l in leads:
+        d = dict(l)
+        d["score"] = _score_lead(l, today_d)
+        # Tage seit letzter Bewegung (Aktivität oder Update)
+        ref = l["last_activity_at"] or l["updated_at"]
+        try:
+            d["days_inactive"] = (today_d - ref.date()).days if ref else None
+        except Exception:
+            d["days_inactive"] = None
+        enriched.append(d)
+
+    # KPIs
+    total        = len(enriched)
+    won          = sum(1 for l in enriched if l["stage"] == "won")
+    lost         = sum(1 for l in enriched if l["stage"] == "lost")
+    active       = sum(1 for l in enriched if l["stage"] not in ("won", "lost"))
+    pipeline_val = sum(l["deal_value"] or 0 for l in enriched if l["stage"] not in ("won", "lost"))
+    weighted_val = sum((l["deal_value"] or 0) * STAGE_PROBABILITY.get(l["stage"], 0)
+                       for l in enriched if l["stage"] not in ("won", "lost"))
+    won_val      = sum(l["deal_value"] or 0 for l in enriched if l["stage"] == "won")
+    closed       = won + lost
+    conv_rate    = round(won / closed * 100) if closed else 0
+    hot_leads    = sum(1 for l in enriched if l["stage"] not in ("won", "lost") and l["score"] >= 60)
+    stale        = [l for l in enriched if l["stage"] not in ("won", "lost")
+                    and (l["days_inactive"] or 0) >= 14]
+
     from collections import defaultdict
     by_stage = defaultdict(list)
-    for l in leads:
-        by_stage[l["stage"]].append(dict(l))
+    for l in enriched:
+        by_stage[l["stage"]].append(l)
+    # Heiße Leads zuerst innerhalb jeder Spalte
+    for k in by_stage:
+        by_stage[k].sort(key=lambda x: -x["score"])
 
-    # Overdue follow-ups
-    today = date.today().isoformat()
-    overdue = [l for l in leads if l["next_followup"] and l["next_followup"] < today
-               and l["stage"] not in ("won", "lost")]
+    overdue   = [l for l in enriched if l["next_followup"] and l["next_followup"] < today
+                 and l["stage"] not in ("won", "lost")]
+    due_today = [l for l in enriched if l["next_followup"] == today
+                 and l["stage"] not in ("won", "lost")]
+
+    # Quellen-Performance: Leads, gewonnen, Win-Rate je Quelle
+    src_stats = {}
+    for l in enriched:
+        s = l["source"] or "Sonstiges"
+        st = src_stats.setdefault(s, {"total": 0, "won": 0, "value": 0.0})
+        st["total"] += 1
+        if l["stage"] == "won":
+            st["won"] += 1
+            st["value"] += l["deal_value"] or 0
+    source_perf = sorted(
+        [{"source": k, **v, "rate": round(v["won"] / v["total"] * 100) if v["total"] else 0}
+         for k, v in src_stats.items()],
+        key=lambda x: (-x["won"], -x["total"]))
+
+    # Verlustgründe
+    loss_counts = {}
+    for l in enriched:
+        if l["stage"] == "lost" and l["lost_reason"]:
+            loss_counts[l["lost_reason"]] = loss_counts.get(l["lost_reason"], 0) + 1
+    loss_reasons = sorted(loss_counts.items(), key=lambda x: -x[1])[:6]
 
     db.close()
     return render_template("akquise.html",
-                           leads=leads, by_stage=by_stage,
+                           leads=enriched, by_stage=by_stage,
                            stages=LEAD_STAGES, stage_keys=STAGE_KEYS,
                            sources=LEAD_SOURCES,
                            kpi=dict(total=total, won=won, active=active,
-                                    pipeline_val=pipeline_val, won_val=won_val,
-                                    conv_rate=conv_rate),
-                           overdue=overdue, today=today)
+                                    pipeline_val=pipeline_val, weighted_val=weighted_val,
+                                    won_val=won_val, conv_rate=conv_rate, hot=hot_leads),
+                           overdue=overdue, due_today=due_today, stale=stale,
+                           source_perf=source_perf, loss_reasons=loss_reasons,
+                           today=today)
+
+
+@app.route("/akquise/<int:lid>/snooze/<int:days>", methods=["POST"])
+@login_required
+def akquise_snooze(lid, days):
+    """Wiedervorlage schnell um X Tage nach vorn schieben."""
+    if days not in (1, 3, 7, 14):
+        abort(400)
+    new_date = (date.today() + timedelta(days=days)).isoformat()
+    db = get_db()
+    db.execute("UPDATE leads SET next_followup=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+               (new_date, lid))
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
+               (lid, "note", f"Wiedervorlage verschoben auf {new_date}", session["username"]))
+    db.commit()
+    db.close()
+    return redirect(request.referrer or url_for("akquise"))
 
 
 @app.route("/akquise/new", methods=["POST"])
