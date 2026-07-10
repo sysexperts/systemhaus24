@@ -51,7 +51,7 @@
           ] %}
           <label class="cursor-pointer">
             <input type="radio" name="type" value="{{ val }}" class="sr-only peer" {% if loop.first %}checked{% endif %}>
-            <span class="text-xs font-medium px-3 py-1.5 rounded-xl border border-gray-200 peer-checked:bg-[#1c3461] peer-checked:text-white peer-checked:border-[#1c3461] hover:bg-gray-50 transition-colors block">
+            <span class="text-xs font-medium text-gray-600 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 peer-checked:bg-[#1c3461] peer-checked:!text-white peer-checked:border-[#1c3461] hover:bg-gray-100 transition-colors block">
               {{ icon }} {{ label }}
             </span>
           </label>
