@@ -29,18 +29,6 @@
   </div>
 </div>
 
-<!-- Kleinunternehmer-Hinweis -->
-{% if is_kg %}
-<div class="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 mb-5 flex items-center gap-3">
-  <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-  <p class="text-sm text-amber-800">
-    <strong>Kleinunternehmerregelung aktiv (§19 UStG)</strong> — alle Beträge sind Nettobeträge, keine Umsatzsteuer wird ausgewiesen.
-  </p>
-</div>
-{% endif %}
-
 <!-- Stat bar: eine einheitliche Fläche wie im Dashboard -->
 <div class="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
   <div class="grid grid-cols-2 md:grid-cols-5 divide-x divide-y md:divide-y-0 divide-gray-100">
