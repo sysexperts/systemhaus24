@@ -121,30 +121,6 @@
       <kbd class="lbl text-[10px] text-white/40 border border-white/20 rounded px-1.5 py-0.5">⌘K</kbd>
     </button>
 
-    <!-- Dark Mode -->
-    <button onclick="toggleDarkMode()" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl hover:bg-white/10 transition-colors mb-1 w-[calc(100%-16px)]">
-      <svg id="dm-icon-moon" class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-      </svg>
-      <svg id="dm-icon-sun" class="w-5 h-5 text-white shrink-0 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-      </svg>
-      <span id="dm-label" class="lbl text-sm text-white font-medium flex-1 text-left">Dark Mode</span>
-    </button>
-    <script>
-      function toggleDarkMode() {
-        const dark = document.documentElement.classList.toggle('dark');
-        localStorage.setItem('theme', dark ? 'dark' : 'light');
-        syncDarkModeUi();
-      }
-      function syncDarkModeUi() {
-        const dark = document.documentElement.classList.contains('dark');
-        document.getElementById('dm-icon-moon').classList.toggle('hidden', dark);
-        document.getElementById('dm-icon-sun').classList.toggle('hidden', !dark);
-        document.getElementById('dm-label').textContent = dark ? 'Light Mode' : 'Dark Mode';
-      }
-      syncDarkModeUi();
-    </script>
 
     <!-- Dashboard -->
     <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if request.endpoint=='dashboard' %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
@@ -299,6 +275,17 @@
     </div>
     {% endif %}
 
+    {% if session.get('role') != 'admin' %}
+    <!-- Einstellungen (persönlich, für Nicht-Admins) -->
+    <a href="{{ url_for('profile') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if request.endpoint == 'profile' %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
+      <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      <span class="lbl text-sm text-white font-medium">Einstellungen</span>
+    </a>
+    {% endif %}
+
     <!-- Bottom -->
     <div class="mt-auto mx-2 space-y-1">
       <div class="border-t border-white/10 my-1"></div>
@@ -323,6 +310,30 @@
       </a>
     </div>
   </aside>
+
+  <!-- Dark-Mode-Toggle (dezent, unten rechts) -->
+  <button onclick="toggleDarkMode()" title="Dark Mode umschalten"
+          class="fixed bottom-4 right-4 z-20 w-8 h-8 rounded-full bg-black/10 hover:bg-black/25 text-gray-500 hover:text-gray-700 flex items-center justify-center opacity-50 hover:opacity-100 transition-all">
+    <svg id="dm-icon-moon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+    </svg>
+    <svg id="dm-icon-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+    </svg>
+  </button>
+  <script>
+    function toggleDarkMode() {
+      const dark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+      syncDarkModeUi();
+    }
+    function syncDarkModeUi() {
+      const dark = document.documentElement.classList.contains('dark');
+      document.getElementById('dm-icon-moon').classList.toggle('hidden', dark);
+      document.getElementById('dm-icon-sun').classList.toggle('hidden', !dark);
+    }
+    syncDarkModeUi();
+  </script>
 
   <!-- Main area -->
   <div class="flex flex-col flex-1 overflow-hidden relative z-10">

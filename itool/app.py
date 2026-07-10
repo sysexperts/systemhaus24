@@ -2189,8 +2189,9 @@ def backup():
 def profile():
     db = get_db()
     user = db.execute("SELECT * FROM users WHERE id=%s", (session["user_id"],)).fetchone()
+    notif_prefs = get_user_notif_prefs(session["user_id"], db)
     db.close()
-    return render_template("profile.html", user=user)
+    return render_template("profile.html", user=user, notif_prefs=notif_prefs)
 
 
 @app.route("/favicon.ico")
@@ -2418,6 +2419,8 @@ def settings_notifications():
     db.commit()
     db.close()
     flash("Benachrichtigungseinstellungen gespeichert", "success")
+    if session.get("role") != "admin":
+        return redirect(url_for("profile"))
     return redirect(url_for("settings") + "#benachrichtigungen")
 
 
