@@ -164,8 +164,8 @@
       <div class="flex flex-col gap-2 min-h-[120px] dropzone rounded-xl transition-colors" data-stage="{{ stage_key }}">
         {% for lead in by_stage[stage_key] %}
         {% set initials = lead.contact_name.split()|map('first')|list|join('')|upper %}
-        <a href="{{ url_for('akquise_detail', lid=lead.id) }}" draggable="true"
-           class="lead-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-[#1c3461]/20 transition-all duration-150 group block cursor-grab active:cursor-grabbing"
+        <div draggable="true" onclick="if(!this.classList.contains('opacity-40')) window.location='{{ url_for('akquise_detail', lid=lead.id) }}'"
+           class="lead-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-[#1c3461]/20 transition-all duration-150 group block cursor-pointer"
            data-id="{{ lead.id }}"
            data-name="{{ lead.contact_name|lower }} {{ (lead.company or '')|lower }}">
 
@@ -230,7 +230,7 @@
               </div>
             </div>
           </div>
-        </a>
+        </div>
         {% else %}
         <div class="empty-hint border-2 border-dashed border-gray-100 rounded-xl h-20 flex items-center justify-center text-gray-300">
           <p class="text-xs">Hierher ziehen</p>
