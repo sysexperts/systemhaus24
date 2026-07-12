@@ -138,7 +138,7 @@ def handle_500(e):
         if notify and cfg.get("smtp_host", "").strip():
             send_smtp_email(
                 notify,
-                f"[tkToolkit] Fehler: {request.path}",
+                f"[Systemhaus24] Fehler: {request.path}",
                 f"Zeitpunkt: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
                 f"Request: {req_info}\n\n{tb}",
                 cfg,
@@ -906,7 +906,7 @@ def invoice_send_email(iid):
         port       = int(cfg.get("smtp_port", 587) or 587)
         user       = cfg.get("smtp_user", "").strip()
         pw         = cfg.get("smtp_pass", "")
-        from_name  = cfg.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+        from_name  = cfg.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
         from_email = (cfg.get("smtp_from_email", "") or user).strip()
         if not host:
             raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -959,7 +959,7 @@ def _smtp_send_pdf(cfg, to_addr, subject, body, pdf_bytes, pdf_name):
     port       = int(cfg.get("smtp_port", 587) or 587)
     user       = cfg.get("smtp_user", "").strip()
     pw         = cfg.get("smtp_pass", "")
-    from_name  = cfg.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+    from_name  = cfg.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
     from_email = (cfg.get("smtp_from_email", "") or user).strip()
     if not host:
         raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -1429,7 +1429,7 @@ def send_smtp_email(to_addr, subject, body_text, settings=None):
     port = int(settings.get("smtp_port", 587) or 587)
     user = settings.get("smtp_user", "").strip()
     pw   = settings.get("smtp_pass", "")
-    from_name  = settings.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+    from_name  = settings.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
     from_email = (settings.get("smtp_from_email", "") or user).strip()
     if not host:
         raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -2597,7 +2597,7 @@ def settings_test_smtp():
         flash("Bitte Test-E-Mail-Adresse eingeben", "error")
         return redirect(url_for("settings"))
     try:
-        send_smtp_email(to_addr, "tkToolkit SMTP-Test", "Verbindung erfolgreich! ✓", cfg)
+        send_smtp_email(to_addr, "Systemhaus24 SMTP-Test", "Verbindung erfolgreich! ✓", cfg)
         flash(f"Test-E-Mail an {to_addr} gesendet ✓", "success")
     except Exception as e:
         flash(f"SMTP-Fehler: {e}", "error")
@@ -3749,7 +3749,7 @@ def contract_send_email(cid):
         port       = int(cfg.get("smtp_port", 587) or 587)
         user       = cfg.get("smtp_user", "").strip()
         pw         = cfg.get("smtp_pass", "")
-        from_name  = cfg.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+        from_name  = cfg.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
         from_email = (cfg.get("smtp_from_email", "") or user).strip()
         if not host:
             raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
