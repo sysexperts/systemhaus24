@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Angebot {{ quote.number }} – tkToolkit{% endblock %}
+{% block content %}
+
+{% set kleingewerbe = cfg.get('company_kleingewerbe') == '1' %}
+{% set grand_total = total if kleingewerbe else total * 1.19 %}
+
+<div class="flex items-center justify-between mb-5">
+  <div class="flex items-center gap-3">
+    <a href="{{ url_for('quotes') }}" class="text-gray-400 hover:text-gray-600">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <h1 class="text-lg font-semibold text-gray-600">Angebot {{ quote.number }}</h1>
+    <span class="px-2.5 py-1 rounded-full text-xs font-medium
+      {% if quote.status=='accepted' %}bg-green-100 text-green-700
+      {% elif quote.status=='sent' %}bg-blue-100 text-blue-700
+      {% elif quote.status=='rejected' %}bg-red-100 text-red-600
+      {% elif quote.status=='invoiced' %}bg-purple-100 text-purple-700
+      {% else %}bg-gray-100 text-gray-500{% endif %}">
+      {{ status_labels.get(quote.status, quote.status) }}
+    </span>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="{{ url_for('quote_pdf', qid=quote.id) }}?inline=1" target="_blank"
+       class="px-4 py-2 rounded-xl text-sm text-gray-600 bg-white/80 border border-gray-200 hover:bg-gray-50 transition-colors">PDF ansehen</a>
+    <a href="{{ url_for('quote_pdf', qid=quote.id) }}"
+       class="px-4 py-2 rounded-xl text-sm text-gray-600 bg-white/80 border border-gray-200 hover:bg-gray-50 transition-colors">Herunterladen</a>
+  </div>
+</div>
+
+<div class="grid grid-cols-3 gap-5">
+
+  <!-- LEFT -->
+  <div class="col-span-2 space-y-4">
+
+    <!-- Kunde + Meta -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <div class="grid grid-cols-3 gap-4 text-sm">
+        <div>
+          <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Kunde</p>
+          <p class="font-medium text-gray-800">{{ quote.company or quote.customer_name }}</p>
+          {% if quote.company %}<p class="text-xs text-gray-400">{{ quote.customer_name }}</p>{% endif %}
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Angebotsdatum</p>
+          <p class="text-gray-700">{{ quote.date }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">Gültig bis</p>
+          <p class="text-gray-700">{{ quote.valid_until or '–' }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Positionen -->
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-100">
+            <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Beschreibung</th>
+            <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Menge</th>
+            <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Einzelpreis</th>
+            <th class="px-5 py-3 text-right text-xs text-gray-400 uppercase tracking-wide">Gesamt</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for it in items %}
+        <tr class="border-b border-gray-50">
+          <td class="px-5 py-3 text-gray-800">{{ it.description }}</td>
+          <td class="px-5 py-3 text-right text-gray-500">{{ it.quantity }}</td>
+          <td class="px-5 py-3 text-right text-gray-500">{{ '%.2f'|format(it.unit_price) }} €</td>
+          <td class="px-5 py-3 text-right font-medium text-gray-800">{{ '%.2f'|format(it.quantity * it.unit_price) }} €</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="px-5 py-2 text-right text-gray-500 text-xs">Netto</td>
+            <td class="px-5 py-2 text-right text-gray-600">{{ '%.2f'|format(total) }} €</td>
+          </tr>
+          {% if not kleingewerbe %}
+          <tr>
+            <td colspan="3" class="px-5 py-2 text-right text-gray-500 text-xs">MwSt. (19%)</td>
+            <td class="px-5 py-2 text-right text-gray-600">{{ '%.2f'|format(total * 0.19) }} €</td>
+          </tr>
+          {% endif %}
+          <tr class="border-t border-gray-200">
+            <td colspan="3" class="px-5 py-3 text-right font-semibold text-gray-800">Gesamtbetrag</td>
+            <td class="px-5 py-3 text-right font-bold text-[#1c3461]">{{ '%.2f'|format(grand_total) }} €</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {% if quote.notes %}
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">Notizen</p>
+      <p class="text-sm text-gray-600 whitespace-pre-line">{{ quote.notes }}</p>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- RIGHT: Aktionen -->
+  <div class="col-span-1 space-y-4">
+
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Aktionen</p>
+      <div class="space-y-2">
+
+        {% if quote.status == 'invoiced' and quote.invoice_id %}
+        <a href="{{ url_for('invoice_view', iid=quote.invoice_id) }}"
+           class="block w-full text-center bg-purple-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
+          Zur Rechnung →
+        </a>
+        {% endif %}
+
+        {% if quote.status == 'accepted' %}
+        <form method="POST" action="{{ url_for('quote_to_invoice', qid=quote.id) }}"
+              onsubmit="return confirm('Rechnung aus diesem Angebot erstellen?')">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition-colors">
+            ✓ In Rechnung umwandeln
+          </button>
+        </form>
+        {% endif %}
+
+        {% if quote.status in ('draft','sent') %}
+        <form method="POST" action="{{ url_for('quote_status', qid=quote.id, status='accepted') }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="w-full bg-green-100 text-green-700 py-2.5 rounded-xl text-sm font-medium hover:bg-green-200 transition-colors">
+            Als angenommen markieren
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('quote_status', qid=quote.id, status='rejected') }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="w-full bg-red-50 text-red-600 py-2.5 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors">
+            Als abgelehnt markieren
+          </button>
+        </form>
+        {% endif %}
+
+        {% if quote.status in ('draft','rejected') %}
+        <form method="POST" action="{{ url_for('quote_delete', qid=quote.id) }}" onsubmit="return confirm('Angebot löschen?')">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="w-full text-gray-400 hover:text-red-500 py-2 text-xs font-medium transition-colors">
+            Angebot löschen
+          </button>
+        </form>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <!-- E-Mail senden -->
+    {% if quote.status not in ('invoiced','rejected') %}
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Per E-Mail senden</p>
+      <form method="POST" action="{{ url_for('quote_send_email', qid=quote.id) }}" class="space-y-2">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input name="to_email" type="email" value="{{ quote.customer_email or '' }}" placeholder="empfaenger@firma.de" required
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input name="subject" value="Angebot {{ quote.number }}"
+               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <textarea name="body" rows="4" placeholder="Nachricht (optional – Standardtext wird verwendet)"
+                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+        <button class="w-full bg-[#1c3461] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+          ✉ Angebot senden (PDF-Anhang)
+        </button>
+      </form>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+{% endblock %}

@@ -12,217 +12,311 @@
   'Sonstiges':   'bg-gray-100 text-gray-500',
 } %}
 
-{% set col_styles = {
-  'new':         ('border-t-gray-400',   'bg-gray-50'),
-  'contacted':   ('border-t-blue-400',   'bg-blue-50/40'),
-  'proposal':    ('border-t-yellow-400', 'bg-yellow-50/40'),
-  'negotiation': ('border-t-orange-400', 'bg-orange-50/40'),
-  'won':         ('border-t-emerald-400','bg-emerald-50/40'),
-  'lost':        ('border-t-red-300',    'bg-red-50/30'),
-} %}
-
 <!-- Header -->
-<div class="flex items-center justify-between mb-5">
+<div class="flex items-center justify-between mb-6">
   <div>
-    <h1 class="text-xl font-bold text-gray-800">Akquise</h1>
-    <p class="text-xs text-gray-400 mt-0.5">Lead-Pipeline · {{ kpi.total }} Leads insgesamt</p>
+    <h1 class="text-2xl font-bold text-gray-800">Akquise</h1>
+    <p class="text-sm text-gray-400 mt-0.5">Lead-Pipeline · {{ kpi.active }} aktive Leads · {{ kpi.hot }} heiß 🔥</p>
   </div>
   <div class="flex items-center gap-2">
-    <!-- Suche -->
     <div class="relative">
       <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
       <input id="leadSearch" type="text" placeholder="Lead suchen…"
-             class="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 w-44">
+             class="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30 w-44 bg-white">
     </div>
     <button onclick="document.getElementById('newLeadModal').classList.remove('hidden')"
-            class="flex items-center gap-2 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium shadow-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-      </svg>
+            class="flex items-center gap-1.5 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
       Neuer Lead
     </button>
   </div>
 </div>
 
-<!-- KPI Cards -->
-<div class="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-5">
-  <div class="bg-gradient-to-br from-[#1c3461] to-[#2a4a8a] rounded-2xl p-4 shadow-md relative overflow-hidden">
-    <div class="absolute -right-3 -top-3 w-16 h-16 bg-white/5 rounded-full"></div>
-    <p class="text-blue-200 text-[10px] font-semibold uppercase tracking-wider mb-1">Leads gesamt</p>
-    <p class="text-3xl font-bold text-white">{{ kpi.total }}</p>
-    <p class="text-blue-300 text-xs mt-1">{{ kpi.active }} aktiv in Pipeline</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 relative overflow-hidden">
-    <div class="absolute right-3 top-3 w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center">
-      <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-    </div>
-    <p class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Konversionsrate</p>
-    <p class="text-3xl font-bold text-gray-800">{{ kpi.conv_rate }}%</p>
-    <p class="text-gray-400 text-xs mt-1">{{ kpi.won }} gewonnen</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-emerald-100 shadow-sm p-4 relative overflow-hidden">
-    <div class="absolute right-3 top-3 w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center">
-      <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-    </div>
-    <p class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Pipeline-Wert</p>
-    <p class="text-2xl font-bold text-gray-800">{{ '%.0f'|format(kpi.pipeline_val) }} €</p>
-    <p class="text-gray-400 text-xs mt-1">potenzielle Aufträge</p>
-  </div>
-  <div class="bg-white rounded-2xl border border-emerald-100 shadow-sm p-4 relative overflow-hidden">
-    <div class="absolute right-3 top-3 w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center">
-      <svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-    </div>
-    <p class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Gewonnen</p>
-    <p class="text-2xl font-bold text-emerald-600">{{ '%.0f'|format(kpi.won_val) }} €</p>
-    <p class="text-gray-400 text-xs mt-1">abgeschlossene Deals</p>
-  </div>
-  <!-- Funnel mini -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-    <p class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider mb-2">Trichter</p>
-    {% set funnel_stages = [('new','Neu'),('contacted','Kontaktiert'),('proposal','Angebot'),('negotiation','Verhandlung')] %}
-    {% set max_f = [by_stage['new']|length, 1]|max %}
-    <div class="space-y-1">
-      {% for fk, fl in funnel_stages %}
-      {% set cnt = by_stage[fk]|length %}
-      <div class="flex items-center gap-2">
-        <span class="text-[9px] text-gray-400 w-14 shrink-0 truncate">{{ fl }}</span>
-        <div class="flex-1 bg-gray-100 rounded-full h-2">
-          <div class="bg-[#1c3461] h-2 rounded-full transition-all"
-               style="width: {{ [(cnt / max_f * 100)|int, 4]|max if max_f > 0 else 4 }}%"></div>
-        </div>
-        <span class="text-[9px] text-gray-500 font-medium w-3 text-right">{{ cnt }}</span>
+<!-- Stat bar: eine einheitliche Fläche wie im Dashboard -->
+<div class="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
+  <div class="grid grid-cols-2 md:grid-cols-5 divide-x divide-y md:divide-y-0 divide-gray-100">
+
+    <!-- Pipeline + Forecast (North star) -->
+    <div class="col-span-2 md:col-span-2 p-5">
+      <p class="text-[11px] font-medium uppercase tracking-wider text-gray-400 mb-2">Pipeline-Wert</p>
+      <div class="flex items-baseline gap-3">
+        <span class="text-[32px] font-semibold text-gray-900 leading-none tabular-nums">{{ '%.0f'|format(kpi.pipeline_val) }} €</span>
+        <span class="text-sm font-medium text-emerald-600 tabular-nums">≈ {{ '%.0f'|format(kpi.weighted_val) }} € Forecast</span>
       </div>
-      {% endfor %}
+      <p class="text-xs text-gray-400 mt-1.5">Forecast = gewichtet nach Abschlusswahrscheinlichkeit je Phase</p>
+    </div>
+
+    <div class="p-5">
+      <p class="text-[11px] font-medium uppercase tracking-wider text-gray-400 mb-2">Aktive Leads</p>
+      <p class="text-[28px] font-semibold text-gray-900 leading-none tabular-nums">{{ kpi.active }}</p>
+      <p class="text-xs text-gray-400 mt-1.5">{{ kpi.hot }} heiß · {{ kpi.total }} gesamt</p>
+    </div>
+
+    <div class="p-5">
+      <p class="text-[11px] font-medium uppercase tracking-wider text-gray-400 mb-2">Win-Rate</p>
+      <p class="text-[28px] font-semibold text-gray-900 leading-none tabular-nums">{{ kpi.conv_rate }}%</p>
+      <p class="text-xs text-gray-400 mt-1.5">{{ kpi.won }} gewonnen (abgeschlossene)</p>
+    </div>
+
+    <div class="p-5">
+      <p class="text-[11px] font-medium uppercase tracking-wider text-gray-400 mb-2">Gewonnen</p>
+      <p class="text-[28px] font-semibold text-emerald-600 leading-none tabular-nums">{{ '%.0f'|format(kpi.won_val) }} €</p>
+      <p class="text-xs text-gray-400 mt-1.5">abgeschlossene Deals</p>
     </div>
   </div>
 </div>
 
-<!-- Überfällige Follow-ups -->
-{% if overdue %}
-<div class="bg-red-50 border border-red-200 rounded-2xl px-5 py-3 mb-4 flex items-start gap-3">
-  <span class="text-lg shrink-0">⏰</span>
-  <div class="flex-1">
-    <p class="text-sm font-semibold text-red-700 mb-1">{{ overdue|length }} überfällige Wiedervorlage(n)</p>
-    <div class="flex flex-wrap gap-2">
+<!-- Follow-up-Disziplin: überfällig / heute / eingeschlafen -->
+{% if overdue or due_today or stale %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
+
+  {% if overdue %}
+  <div class="bg-red-50 border border-red-200 rounded-2xl overflow-hidden">
+    <div class="flex items-center gap-2 px-4 py-2.5 border-b border-red-100">
+      <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span class="text-sm font-semibold text-red-700">{{ overdue|length }} überfällig</span>
+    </div>
+    <div class="divide-y divide-red-100 max-h-44 overflow-y-auto">
       {% for l in overdue %}
-      <a href="{{ url_for('akquise_detail', lid=l.id) }}"
-         class="inline-flex items-center gap-1 text-xs bg-white border border-red-200 text-red-700 px-3 py-1 rounded-full hover:bg-red-100 transition-colors font-medium shadow-sm">
-        <span class="w-4 h-4 bg-red-200 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0">{{ l.contact_name[0]|upper }}</span>
-        {{ l.contact_name }}{% if l.company %} · {{ l.company }}{% endif %}
-        <span class="text-red-400 font-normal">seit {{ l.next_followup }}</span>
+      <div class="flex items-center gap-2 px-4 py-2">
+        <a href="{{ url_for('akquise_detail', lid=l.id) }}" class="flex-1 min-w-0 hover:underline">
+          <span class="text-xs font-medium text-red-700 truncate block">{{ l.contact_name }}{% if l.company %} · {{ l.company }}{% endif %}</span>
+          <span class="text-[10px] text-red-400">seit {{ l.next_followup }}</span>
+        </a>
+        <form method="POST" action="{{ url_for('akquise_snooze', lid=l.id, days=3) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="text-[10px] bg-white border border-red-200 text-red-600 px-2 py-1 rounded-lg hover:bg-red-100 font-medium" title="Wiedervorlage +3 Tage">+3T</button>
+        </form>
+        <form method="POST" action="{{ url_for('akquise_snooze', lid=l.id, days=7) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="text-[10px] bg-white border border-red-200 text-red-600 px-2 py-1 rounded-lg hover:bg-red-100 font-medium" title="Wiedervorlage +7 Tage">+7T</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if due_today %}
+  <div class="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+    <div class="flex items-center gap-2 px-4 py-2.5 border-b border-amber-100">
+      <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      <span class="text-sm font-semibold text-amber-700">{{ due_today|length }} heute fällig</span>
+    </div>
+    <div class="divide-y divide-amber-100 max-h-44 overflow-y-auto">
+      {% for l in due_today %}
+      <a href="{{ url_for('akquise_detail', lid=l.id) }}" class="flex items-center gap-2 px-4 py-2 hover:bg-amber-100/50 transition-colors">
+        <span class="text-xs font-medium text-amber-800 truncate flex-1">{{ l.contact_name }}{% if l.company %} · {{ l.company }}{% endif %}</span>
+        {% if l.contact_phone %}<span class="text-[10px] text-amber-600">{{ l.contact_phone }}</span>{% endif %}
       </a>
       {% endfor %}
     </div>
   </div>
+  {% endif %}
+
+  {% if stale %}
+  <div class="bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden">
+    <div class="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100">
+      <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-1.414 1.414M12 3v2m-6.364.636l1.414 1.414M3 12h2m14 0h2m-3.05 6.364l-1.414-1.414M12 19v2m-4.95-2.636l1.414-1.414M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
+      <span class="text-sm font-semibold text-gray-600">{{ stale|length }} eingeschlafen (14+ Tage)</span>
+    </div>
+    <div class="divide-y divide-gray-100 max-h-44 overflow-y-auto">
+      {% for l in stale %}
+      <a href="{{ url_for('akquise_detail', lid=l.id) }}" class="flex items-center gap-2 px-4 py-2 hover:bg-gray-100/70 transition-colors">
+        <span class="text-xs font-medium text-gray-600 truncate flex-1">{{ l.contact_name }}{% if l.company %} · {{ l.company }}{% endif %}</span>
+        <span class="text-[10px] text-gray-400">{{ l.days_inactive }} Tage inaktiv</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
-<!-- Kanban Board -->
-<div class="overflow-x-auto pb-4 -mx-1 px-1">
+<!-- Kanban Board (Drag & Drop) -->
+<div class="overflow-x-auto pb-4 -mx-1 px-1 mb-5">
   <div class="flex gap-3 min-w-max" id="kanbanBoard">
     {% for stage_key, stage_label, stage_cls in stages %}
-    {% set top_border, col_bg = col_styles.get(stage_key, ('border-t-gray-200', 'bg-gray-50')) %}
     <div class="w-[280px] flex flex-col gap-2 kanban-col" data-stage="{{ stage_key }}">
 
       <!-- Column Header -->
-      <div class="rounded-2xl border-t-4 {{ top_border }} bg-white border border-gray-100 shadow-sm px-4 py-3">
+      <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full
+              {% if stage_key=='new' %}bg-gray-400{% elif stage_key=='contacted' %}bg-blue-400
+              {% elif stage_key=='proposal' %}bg-yellow-400{% elif stage_key=='negotiation' %}bg-orange-400
+              {% elif stage_key=='won' %}bg-emerald-400{% else %}bg-red-300{% endif %}"></span>
             <span class="text-sm font-semibold text-gray-700">{{ stage_label }}</span>
-            <span class="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{{ by_stage[stage_key]|length }}</span>
+            <span class="text-xs font-medium text-gray-400 tabular-nums">{{ by_stage[stage_key]|length }}</span>
           </div>
           {% set col_val = namespace(v=0) %}
           {% for l in by_stage[stage_key] %}{% set col_val.v = col_val.v + (l.deal_value or 0) %}{% endfor %}
           {% if col_val.v > 0 %}
-          <span class="text-xs font-semibold text-gray-500">{{ '%.0f'|format(col_val.v) }} €</span>
+          <span class="text-xs font-semibold text-gray-500 tabular-nums">{{ '%.0f'|format(col_val.v) }} €</span>
           {% endif %}
         </div>
       </div>
 
-      <!-- Cards -->
-      <div class="flex flex-col gap-2 min-h-[100px]">
+      <!-- Cards (Dropzone) -->
+      <div class="flex flex-col gap-2 min-h-[120px] dropzone rounded-xl transition-colors" data-stage="{{ stage_key }}">
         {% for lead in by_stage[stage_key] %}
         {% set initials = lead.contact_name.split()|map('first')|list|join('')|upper %}
-        {% set avatar_colors = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-teal-500'] %}
-        {% set avatar_color = avatar_colors[lead.id % 6] %}
-        <a href="{{ url_for('akquise_detail', lid=lead.id) }}"
-           class="lead-card bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-lg hover:-translate-y-0.5 hover:border-[#1c3461]/20 transition-all duration-150 group block"
+        <div draggable="true" onclick="if(!this.classList.contains('opacity-40')) window.location='{{ url_for('akquise_detail', lid=lead.id) }}'"
+           class="lead-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-[#1c3461]/20 transition-all duration-150 group block cursor-pointer"
+           data-id="{{ lead.id }}"
            data-name="{{ lead.contact_name|lower }} {{ (lead.company or '')|lower }}">
 
-          <!-- Top row: Avatar + Name + Wert -->
-          <div class="flex items-start gap-3 mb-3">
-            <div class="w-9 h-9 {{ avatar_color }} rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+          <!-- Top: Name + Score -->
+          <div class="flex items-start gap-3 mb-2.5">
+            <div class="w-9 h-9 bg-[#1c3461] rounded-xl flex items-center justify-center shrink-0">
               <span class="text-white text-xs font-bold">{{ initials[:2] }}</span>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-gray-800 group-hover:text-[#1c3461] transition-colors truncate">
-                {{ lead.contact_name }}
-              </p>
-              {% if lead.company %}
-              <p class="text-xs text-gray-400 truncate">{{ lead.company }}</p>
-              {% endif %}
+              <p class="text-sm font-semibold text-gray-800 group-hover:text-[#1c3461] transition-colors truncate">{{ lead.contact_name }}</p>
+              {% if lead.company %}<p class="text-xs text-gray-400 truncate">{{ lead.company }}</p>{% endif %}
             </div>
-            {% if lead.deal_value and lead.deal_value > 0 %}
-            <div class="shrink-0 text-right">
-              <span class="text-sm font-bold text-emerald-600">{{ '%.0f'|format(lead.deal_value) }} €</span>
-            </div>
+            {% if lead.stage not in ('won','lost') %}
+            <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full
+              {% if lead.score >= 60 %}bg-red-50 text-red-600{% elif lead.score >= 35 %}bg-amber-50 text-amber-600{% else %}bg-gray-100 text-gray-400{% endif %}"
+              title="Lead-Score: {{ lead.score }}/100">
+              {% if lead.score >= 60 %}🔥 Heiß{% elif lead.score >= 35 %}Warm{% else %}Kalt{% endif %}
+            </span>
             {% endif %}
           </div>
 
-          <!-- Middle: letzte Aktivität -->
+          <!-- Wert + Aging -->
+          <div class="flex items-center justify-between mb-2.5">
+            {% if lead.deal_value and lead.deal_value > 0 %}
+            <span class="text-sm font-bold text-gray-800 tabular-nums">{{ '%.0f'|format(lead.deal_value) }} €</span>
+            {% else %}<span></span>{% endif %}
+            {% if lead.stage not in ('won','lost') and lead.days_inactive is not none and lead.days_inactive >= 14 %}
+            <span class="text-[10px] text-gray-400" title="{{ lead.days_inactive }} Tage keine Aktivität">💤 {{ lead.days_inactive }}T inaktiv</span>
+            {% endif %}
+          </div>
+
           {% if lead.last_activity %}
-          <p class="text-xs text-gray-400 truncate mb-3 italic">"{{ lead.last_activity }}"</p>
+          <p class="text-xs text-gray-400 truncate mb-2.5 italic">"{{ lead.last_activity }}"</p>
           {% endif %}
 
-          <!-- Bottom row: Quelle + Followup + Schnellaktionen -->
+          <!-- Bottom: Quelle + Followup + Aktionen -->
           <div class="flex items-center justify-between gap-2">
-            <span class="text-[10px] font-medium px-2 py-0.5 rounded-full {{ source_colors.get(lead.source, 'bg-gray-100 text-gray-500') }}">
-              {{ lead.source }}
-            </span>
+            <span class="text-[10px] font-medium px-2 py-0.5 rounded-full {{ source_colors.get(lead.source, 'bg-gray-100 text-gray-500') }}">{{ lead.source }}</span>
             <div class="flex items-center gap-2">
               {% if lead.next_followup %}
                 {% if lead.next_followup < today %}
-                <span class="text-[10px] text-red-500 font-semibold flex items-center gap-0.5">
-                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
-                  Überfällig
-                </span>
+                <span class="text-[10px] text-red-500 font-semibold">⏰ Überfällig</span>
                 {% elif lead.next_followup == today %}
-                <span class="text-[10px] text-orange-500 font-semibold">📅 Heute</span>
+                <span class="text-[10px] text-amber-500 font-semibold">📅 Heute</span>
                 {% else %}
                 <span class="text-[10px] text-gray-400">{{ lead.next_followup }}</span>
                 {% endif %}
               {% endif %}
-              <!-- Schnellaktionen -->
               <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {% if lead.contact_phone %}
                 <a href="tel:{{ lead.contact_phone }}" onclick="event.stopPropagation()"
-                   class="w-6 h-6 bg-blue-50 text-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-100 transition-colors"
-                   title="{{ lead.contact_phone }}">
+                   class="w-6 h-6 bg-gray-50 text-gray-500 rounded-lg flex items-center justify-center hover:bg-blue-50 hover:text-blue-500 transition-colors" title="{{ lead.contact_phone }}">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                 </a>
                 {% endif %}
                 {% if lead.contact_email %}
                 <a href="mailto:{{ lead.contact_email }}" onclick="event.stopPropagation()"
-                   class="w-6 h-6 bg-purple-50 text-purple-500 rounded-lg flex items-center justify-center hover:bg-purple-100 transition-colors"
-                   title="{{ lead.contact_email }}">
+                   class="w-6 h-6 bg-gray-50 text-gray-500 rounded-lg flex items-center justify-center hover:bg-purple-50 hover:text-purple-500 transition-colors" title="{{ lead.contact_email }}">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                 </a>
                 {% endif %}
               </div>
             </div>
           </div>
-        </a>
+        </div>
         {% else %}
-        <div class="border-2 border-dashed border-gray-100 rounded-xl h-20 flex flex-col items-center justify-center gap-1 text-gray-300">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
-          <p class="text-xs">Kein Lead</p>
+        <div class="empty-hint border-2 border-dashed border-gray-100 rounded-xl h-20 flex items-center justify-center text-gray-300">
+          <p class="text-xs">Hierher ziehen</p>
         </div>
         {% endfor %}
       </div>
     </div>
     {% endfor %}
+  </div>
+</div>
+
+<!-- Analytics: Quellen-Performance + Verlustgründe -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- Quellen-Performance (span 2) -->
+  <div class="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+      <h2 class="text-sm font-semibold text-gray-700">Quellen-Performance</h2>
+      <span class="text-xs text-gray-400">Welcher Kanal bringt Kunden?</span>
+    </div>
+    {% if source_perf %}
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-50">
+          <th class="px-5 py-2.5 text-left text-xs text-gray-400 uppercase tracking-wide">Quelle</th>
+          <th class="px-5 py-2.5 text-right text-xs text-gray-400 uppercase tracking-wide">Leads</th>
+          <th class="px-5 py-2.5 text-right text-xs text-gray-400 uppercase tracking-wide">Gewonnen</th>
+          <th class="px-5 py-2.5 text-left text-xs text-gray-400 uppercase tracking-wide" style="width:35%">Win-Rate</th>
+          <th class="px-5 py-2.5 text-right text-xs text-gray-400 uppercase tracking-wide">Umsatz</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in source_perf %}
+      <tr class="border-b border-gray-50">
+        <td class="px-5 py-2.5">
+          <span class="text-[10px] font-medium px-2 py-0.5 rounded-full {{ source_colors.get(s.source, 'bg-gray-100 text-gray-500') }}">{{ s.source }}</span>
+        </td>
+        <td class="px-5 py-2.5 text-right text-gray-600 tabular-nums">{{ s.total }}</td>
+        <td class="px-5 py-2.5 text-right text-gray-800 font-medium tabular-nums">{{ s.won }}</td>
+        <td class="px-5 py-2.5">
+          <div class="flex items-center gap-2">
+            <div class="flex-1 bg-gray-100 rounded-full h-1.5">
+              <div class="bg-[#1c3461] h-1.5 rounded-full" style="width:{{ s.rate }}%"></div>
+            </div>
+            <span class="text-xs text-gray-500 w-9 text-right tabular-nums">{{ s.rate }}%</span>
+          </div>
+        </td>
+        <td class="px-5 py-2.5 text-right font-semibold text-emerald-600 tabular-nums">{{ '%.0f'|format(s.value) }} €</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-10 text-gray-300"><p class="text-sm">Noch keine Daten</p></div>
+    {% endif %}
+  </div>
+
+  <!-- Verlustgründe -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+      <h2 class="text-sm font-semibold text-gray-700">Verlustgründe</h2>
+      <span class="text-xs text-gray-400">Woran scheitert's?</span>
+    </div>
+    {% if loss_reasons %}
+    <div class="divide-y divide-gray-50">
+      {% set max_loss = loss_reasons[0][1] %}
+      {% for reason, cnt in loss_reasons %}
+      <div class="px-5 py-3">
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="text-sm font-medium text-gray-700 truncate">{{ reason }}</p>
+          <p class="text-xs font-semibold text-gray-500 shrink-0 ml-2 tabular-nums">{{ cnt }}×</p>
+        </div>
+        <div class="w-full bg-gray-100 rounded-full h-1.5">
+          <div class="bg-red-400 h-1.5 rounded-full" style="width:{{ (cnt / max_loss * 100)|round }}%"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-10 text-gray-300">
+      <p class="text-sm">Keine verlorenen Leads mit Grund</p>
+      <p class="text-xs mt-1">Beim Verschieben nach "Verloren" wird der Grund abgefragt</p>
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -241,7 +335,6 @@
     </div>
     <form method="POST" action="{{ url_for('akquise_new') }}" class="p-6 space-y-4">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-
       <div class="grid grid-cols-2 gap-3">
         <div class="col-span-2">
           <label class="block text-xs font-semibold text-gray-500 mb-1.5">Ansprechpartner *</label>
@@ -300,12 +393,60 @@
 </div>
 
 <script>
-// Live-Suche über alle Karten
+// ─── Live-Suche ────────────────────────────────────────────────
 document.getElementById('leadSearch').addEventListener('input', function() {
   const q = this.value.toLowerCase().trim();
   document.querySelectorAll('.lead-card').forEach(card => {
     const name = card.dataset.name || '';
-    card.closest('a').style.display = (!q || name.includes(q)) ? '' : 'none';
+    card.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
+});
+
+// ─── Drag & Drop: Karte in andere Phase ziehen ─────────────────
+const CSRF = "{{ csrf_token() }}";
+let draggedId = null;
+
+document.querySelectorAll('.lead-card').forEach(card => {
+  card.addEventListener('dragstart', e => {
+    draggedId = card.dataset.id;
+    card.classList.add('opacity-40');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('opacity-40');
+    document.querySelectorAll('.dropzone').forEach(z => z.classList.remove('bg-blue-50/60','ring-2','ring-blue-300'));
+  });
+  // Klick nicht auslösen, wenn gerade gezogen wurde
+  card.addEventListener('click', e => { if (card.classList.contains('opacity-40')) e.preventDefault(); });
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    zone.classList.add('bg-blue-50/60','ring-2','ring-blue-300');
+  });
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('bg-blue-50/60','ring-2','ring-blue-300');
+  });
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('bg-blue-50/60','ring-2','ring-blue-300');
+    if (!draggedId) return;
+    const stage = zone.dataset.stage;
+    let lostReason = '';
+    if (stage === 'lost') {
+      lostReason = prompt('Warum wurde der Lead verloren? (z.B. Preis, Konkurrenz, kein Bedarf)') || '';
+      if (lostReason === null) return;
+    }
+    const fd = new FormData();
+    fd.append('_csrf_token', CSRF);
+    fd.append('stage', stage);
+    fd.append('lost_reason', lostReason);
+    fetch('/akquise/' + draggedId + '/stage', { method: 'POST', body: fd })
+      .then(() => window.location.reload())
+      .catch(() => window.location.reload());
+    draggedId = null;
   });
 });
 </script>

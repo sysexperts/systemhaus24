@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 2cm 2.2cm 2.4cm 2.2cm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
+
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 0.9cm; }
+  .header-table td { vertical-align: top; padding: 0; }
+  .header-table td.right { text-align: right; }
+
+  .company-name { font-size: 12.5pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
+  .company-details { font-size: 8.5pt; color: #888; line-height: 1.6; }
+
+  .doc-title { font-size: 20pt; font-weight: bold; color: #1c3461; letter-spacing: 3pt; margin-bottom: 8pt; }
+  .doc-number { font-size: 9.5pt; color: #999; font-family: Courier, monospace; }
+
+  .callout-table { width: 100%; border-collapse: collapse; background: #f3f5fa; margin-bottom: 0.9cm; }
+  .callout-table td { padding: 11pt 16pt; }
+  .callout-label { font-size: 7.5pt; color: #7a8296; text-transform: uppercase; letter-spacing: 1pt; margin-bottom: 3pt; }
+  .callout-value { font-size: 18pt; font-weight: bold; color: #1c3461; }
+  .callout-value.due { color: #444; font-size: 12pt; }
+  .callout-divider { width: 1px; background: #dfe2ea; }
+
+  .bill-to { margin-bottom: 0.9cm; }
+  .bill-label { font-size: 7.5pt; color: #aaa; text-transform: uppercase; letter-spacing: 1pt; margin-bottom: 4pt; }
+  .bill-name { font-weight: bold; font-size: 11pt; color: #222; margin-bottom: 2pt; }
+  .bill-sub { font-size: 9pt; color: #666; line-height: 1.6; }
+
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 0.7cm; }
+  .items-table th { padding: 6pt 4pt; font-size: 7.5pt; color: #999; text-transform: uppercase; letter-spacing: 0.5pt; font-weight: bold; text-align: right; border-bottom: 1.5px solid #1c3461; }
+  .items-table th.left { text-align: left; }
+  .items-table td { padding: 7pt 4pt; font-size: 9.5pt; border-bottom: 1px solid #eee; }
+  .items-table td.right { text-align: right; color: #555; }
+  .items-table td.total-col { text-align: right; font-weight: bold; color: #222; }
+  .items-table tr.odd td { background: #fafbfc; }
+
+  .totals-table { border-collapse: collapse; margin-left: auto; width: 260pt; }
+  .totals-table td { padding: 3pt 4pt; font-size: 9.5pt; }
+  .totals-table td.lbl { text-align: right; color: #777; padding-right: 12pt; }
+  .totals-table td.val { text-align: right; color: #555; }
+  .totals-table tr.grand td { border-top: 1.5px solid #1c3461; padding-top: 7pt; font-weight: bold; font-size: 12pt; }
+  .totals-table tr.grand td.lbl { color: #333; }
+  .totals-table tr.grand td.val { color: #1c3461; }
+
+  .notes { font-size: 9pt; color: #666; margin-top: 0.5cm; border-top: 1px solid #eee; padding-top: 0.5cm; }
+  .kg-notice { font-size: 8.5pt; color: #666; background: #fafafa; padding: 8pt 12pt; margin-top: 0.6cm; }
+  .validity-note { font-size: 9pt; color: #444; background: #f3f5fa; padding: 8pt 12pt; margin-top: 0.6cm; }
+
+  .footer-note { text-align: center; font-size: 8pt; color: #b0b3bd; margin-top: 1cm; }
+  .logo { max-height: 46pt; max-width: 150pt; }
+</style>
+</head>
+<body>
+{% set kleingewerbe = cfg.get('company_kleingewerbe') == '1' %}
+{% set grand_total = total if kleingewerbe else total * 1.19 %}
+
+<!-- Header -->
+<table class="header-table">
+  <tr>
+    <td style="width:55%">
+      {% if cfg.get('invoice_logo_ext') %}
+      <img src="file://{{ doc_store }}/invoice_logo.{{ cfg.get('invoice_logo_ext') }}" class="logo"><br>
+      {% elif cfg.get('company_logo_ext') %}
+      <img src="file://{{ doc_store }}/logo.{{ cfg.get('company_logo_ext') }}" class="logo"><br>
+      {% endif %}
+      <div class="company-name">{{ cfg.get('company_name','Ihre Firma') }}</div>
+      <div class="company-details">
+        {% if cfg.get('company_street') %}{{ cfg.get('company_street') }}<br>{% endif %}
+        {% if cfg.get('company_zip') or cfg.get('company_city') %}{{ cfg.get('company_zip','') }} {{ cfg.get('company_city','') }}<br>{% endif %}
+        {% if cfg.get('company_phone') %}Tel: {{ cfg.get('company_phone') }}<br>{% endif %}
+        {% if cfg.get('company_email') %}{{ cfg.get('company_email') }}<br>{% endif %}
+        {% if cfg.get('company_tax_id') %}Steuernr.: {{ cfg.get('company_tax_id') }}{% endif %}
+      </div>
+    </td>
+    <td class="right" style="width:45%">
+      <div class="doc-title">ANGEBOT</div>
+      <div class="doc-number">{{ quote.number }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- Callout -->
+<table class="callout-table">
+  <tr>
+    <td style="width:170pt">
+      <div class="callout-label">Angebotssumme</div>
+      <div class="callout-value">{{ '%.2f'|format(grand_total) }} €</div>
+    </td>
+    <td class="callout-divider" style="width:1pt; padding:0;"></td>
+    <td style="width:145pt">
+      <div class="callout-label">Angebotsdatum</div>
+      <div class="callout-value due">{{ quote.date }}</div>
+    </td>
+    <td class="callout-divider" style="width:1pt; padding:0;"></td>
+    <td style="width:145pt">
+      <div class="callout-label">Gültig bis</div>
+      <div class="callout-value due">{{ quote.valid_until or '–' }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- Empfänger -->
+<div class="bill-to">
+  <div class="bill-label">Angebot für</div>
+  <div class="bill-name">{{ quote.customer_company or quote.customer_name }}</div>
+  <div class="bill-sub">
+    {% if quote.customer_company %}{{ quote.customer_name }}<br>{% endif %}
+    {% if quote.street %}{{ quote.street }}<br>{% endif %}
+    {% if quote.zip or quote.city %}{{ quote.zip or '' }} {{ quote.city or '' }}<br>{% endif %}
+    {% if quote.customer_tax_id %}USt-IdNr.: {{ quote.customer_tax_id }}{% endif %}
+  </div>
+</div>
+
+<!-- Positionen -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th class="left" style="width:24pt">Pos.</th>
+      <th class="left">Beschreibung</th>
+      <th style="width:50pt">Menge</th>
+      <th style="width:65pt">Einzelpreis</th>
+      <th style="width:70pt">Gesamt</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for item in items %}
+  <tr class="{{ 'odd' if loop.index is odd else '' }}">
+    <td class="right">{{ loop.index }}</td>
+    <td>{{ item.description }}</td>
+    <td class="right">{{ item.quantity }}</td>
+    <td class="right">{{ '%.2f'|format(item.unit_price) }} €</td>
+    <td class="total-col">{{ '%.2f'|format(item.quantity * item.unit_price) }} €</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<!-- Summen -->
+<table class="totals-table">
+  <tr>
+    <td class="lbl">Nettobetrag</td>
+    <td class="val">{{ '%.2f'|format(total) }} €</td>
+  </tr>
+  {% if kleingewerbe %}
+  <tr>
+    <td class="lbl" style="font-size:8pt">Umsatzsteuer (§19 UStG)</td>
+    <td class="val" style="font-size:8pt">entfällt</td>
+  </tr>
+  <tr class="grand">
+    <td class="lbl">Angebotssumme</td>
+    <td class="val">{{ '%.2f'|format(total) }} €</td>
+  </tr>
+  {% else %}
+  <tr>
+    <td class="lbl">zzgl. 19% MwSt.</td>
+    <td class="val">{{ '%.2f'|format(total * 0.19) }} €</td>
+  </tr>
+  <tr class="grand">
+    <td class="lbl">Angebotssumme (brutto)</td>
+    <td class="val">{{ '%.2f'|format(total * 1.19) }} €</td>
+  </tr>
+  {% endif %}
+</table>
+
+{% if quote.valid_until %}
+<div class="validity-note">
+  Dieses Angebot ist gültig bis zum <b>{{ quote.valid_until }}</b>. Alle Preise verstehen sich
+  {% if kleingewerbe %}als Endpreise (keine USt. gem. §19 UStG){% else %}zzgl. der gesetzlichen Umsatzsteuer{% endif %}.
+</div>
+{% endif %}
+
+{% if quote.notes %}
+<div class="notes">{{ quote.notes }}</div>
+{% endif %}
+
+{% if kleingewerbe %}
+<div class="kg-notice">
+  Gemäß §19 UStG (Kleinunternehmerregelung) wird keine Umsatzsteuer berechnet.
+</div>
+{% endif %}
+
+<div class="footer-note">Wir freuen uns auf Ihren Auftrag — {{ cfg.get('company_name','') }}</div>
+
+</body>
+</html>

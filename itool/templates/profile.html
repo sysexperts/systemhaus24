@@ -77,4 +77,38 @@
   </div>
 
 </div>
+
+<!-- Benachrichtigungen -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6 max-w-3xl mt-5">
+  <p class="text-sm font-semibold text-gray-700 mb-1">Benachrichtigungen</p>
+  <p class="text-xs text-gray-400 mb-5">Wähle welche Ereignisse dir als Popup angezeigt werden sollen.</p>
+  <form method="POST" action="{{ url_for('settings_notifications') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="space-y-3">
+      {% set notif_items = [
+        ('notif_sound',         '🔔', 'Sound aktivieren',      'Spielt einen dezenten Ton ab wenn eine Benachrichtigung erscheint'),
+        ('notif_mention',       '💬', '@Erwähnungen',          'Wenn dich jemand im Team-Chat mit @Name erwähnt'),
+        ('notif_new_ticket',    '🎫', 'Neues Ticket',          'Wenn ein neues Support-Ticket erstellt wird'),
+        ('notif_new_invoice',   '🧾', 'Neue Rechnung',         'Wenn eine neue Rechnung erstellt wird'),
+        ('notif_invoice_paid',  '✅', 'Rechnung bezahlt',      'Wenn eine Rechnung als bezahlt markiert wird'),
+        ('notif_new_promoter',  '🤝', 'Neuer Promoter',        'Wenn sich jemand über einen Promoter-Link registriert'),
+        ('notif_payout',        '💸', 'Auszahlungsanfrage',    'Wenn ein Promoter eine Auszahlung beantragt'),
+      ] %}
+      {% for key, icon, label, desc in notif_items %}
+      <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 cursor-pointer transition-colors">
+        <input type="checkbox" name="{{ key }}" value="1"
+               {% if notif_prefs.get(key, '1') == '1' %}checked{% endif %}
+               class="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1c3461]">
+        <div class="flex-1">
+          <p class="text-sm font-medium text-gray-700">{{ icon }} {{ label }}</p>
+          <p class="text-xs text-gray-400">{{ desc }}</p>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="mt-4 bg-[#1c3461] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Speichern
+    </button>
+  </form>
+</div>
 {% endblock %}

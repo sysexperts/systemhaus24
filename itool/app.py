@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import threading
 import time
@@ -220,14 +221,12 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
-        if session.get("role") == "promoter":
-            return redirect(url_for("promoter_dashboard"))
         return f(*args, **kwargs)
     return decorated
 
 
 # CSRF check for all state-changing requests from logged-in users
-_CSRF_EXEMPT = {"login", "promoter_register", "static"}
+_CSRF_EXEMPT = {"login", "promoter_register", "referral_landing", "static"}
 
 @app.before_request
 def enforce_csrf_and_session():
@@ -257,8 +256,6 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
-        if session.get("role") == "promoter":
-            return redirect(url_for("promoter_dashboard"))
         if session.get("role") != "admin":
             flash("Kein Zugriff – nur für Administratoren.", "error")
             return redirect(url_for("dashboard"))
@@ -326,6 +323,16 @@ def feed_send():
         db = get_db()
         db.execute("INSERT INTO feed_messages (user_id, username, body, attachment) VALUES (%s,%s,%s,%s)",
                    (session["user_id"], session["username"], body or "", attachment))
+        # Detect @mentions and notify each mentioned user
+        if body:
+            sender = session.get("display_name") or session.get("username")
+            for uname in set(re.findall(r'@(\w+)', body)):
+                user = db.execute("SELECT id FROM users WHERE username=%s", (uname,)).fetchone()
+                if user and user["id"] != session["user_id"]:
+                    preview = body[:80] + ("…" if len(body) > 80 else "")
+                    db.execute(
+                        "INSERT INTO notifications (type, title, body, link, target_user_id) VALUES (%s,%s,%s,%s,%s)",
+                        ("mention", f"{sender} hat dich erwähnt", f'"{preview}"', None, user["id"]))
         db.commit()
         db.close()
     return redirect(request.referrer or url_for("dashboard"))
@@ -379,7 +386,15 @@ def feed_messages_json():
         ORDER BY fm.created_at ASC LIMIT 100
     """).fetchall()
     db.close()
-    return jsonify([dict(r) for r in rows])
+    result = []
+    for r in rows:
+        d = dict(r)
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].strftime("%Y-%m-%dT%H:%M:%S")
+        else:
+            d["created_at"] = str(d["created_at"])[:19].replace(" ", "T")
+        result.append(d)
+    return jsonify(result)
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -429,25 +444,36 @@ def login():
             return render_template("login.html")
         db = get_db()
         user = db.execute("SELECT * FROM users WHERE username=%s", (request.form.get("username", ""),)).fetchone()
-        db.close()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             _clear_attempts(ip)
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["display_name"] = user["display_name"] or user["username"]
             session["role"] = user["role"] or "admin"
-            dest = url_for("promoter_dashboard") if session["role"] == "promoter" else url_for("dashboard")
+            log_activity(db, "angemeldet", "Login", user["id"], user["username"], f"IP: {ip}")
+            db.commit()
+            db.close()
+            dest = url_for("dashboard")
             resp = make_response(redirect(dest))
             resp.set_cookie("last_uid",          str(user["id"]),                          max_age=30*24*3600)
             resp.set_cookie("last_display_name", user["display_name"] or user["username"], max_age=30*24*3600)
             return resp
         _record_attempt(ip)
+        log_activity(db, "Anmeldung fehlgeschlagen", "Login", None,
+                     request.form.get("username", "")[:80], f"IP: {ip}")
+        db.commit()
+        db.close()
         flash("Falscher Benutzername oder Passwort", "error")
     return render_template("login.html")
 
 
 @app.route("/logout")
 def logout():
+    if session.get("user_id"):
+        db = get_db()
+        log_activity(db, "abgemeldet", "Login", session.get("user_id"), session.get("username"))
+        db.commit()
+        db.close()
     session.clear()
     return redirect(url_for("login"))
 
@@ -589,6 +615,27 @@ def _customer_fields(form):
     )
 
 
+_CUSTOMER_FIELD_COLS = (
+    "customer_number", "company", "legal_form", "name", "email", "phone", "website",
+    "street", "zip", "city", "country", "tax_id", "payment_terms",
+    "contact_person", "contact_position", "contact_email", "contact_phone", "contact_mobile",
+    "contract_type", "support_level", "contract_start", "contract_end", "monthly_rate",
+    "num_workstations", "num_servers", "it_notes", "source", "notes", "status",
+)
+
+
+def _diff_fields(old_row, new_values, cols):
+    """Human-readable list of changed fields for the audit log."""
+    changes = []
+    for col, new in zip(cols, new_values):
+        old = old_row[col] if old_row else None
+        if str(old if old is not None else "") != str(new if new is not None else ""):
+            old_s = str(old)[:60] if old not in (None, "") else "leer"
+            new_s = str(new)[:60] if new not in (None, "") else "leer"
+            changes.append(f"{col}: {old_s} → {new_s}")
+    return "; ".join(changes)[:1500] if changes else None
+
+
 @app.route("/customers/new", methods=["GET", "POST"])
 @login_required
 def customer_new():
@@ -626,7 +673,8 @@ def customer_edit(cid):
             contract_type=%s,support_level=%s,contract_start=%s,contract_end=%s,monthly_rate=%s,
             num_workstations=%s,num_servers=%s,it_notes=%s,source=%s,notes=%s,status=%s
             WHERE id=%s""", (*fields, cid))
-        log_activity(db, "bearbeitet", "Kunde", cid, fields[3])
+        log_activity(db, "bearbeitet", "Kunde", cid, fields[3],
+                     _diff_fields(customer, fields, _CUSTOMER_FIELD_COLS))
         db.commit()
         db.close()
         flash("Kunde gespeichert", "success")
@@ -894,6 +942,380 @@ def invoice_send_email(iid):
         flash(f"E-Mail-Fehler: {e}", "error")
     db.close()
     return redirect(url_for("invoice_view", iid=iid))
+
+
+# ------------------------------------------------------------------ Mahnwesen
+
+#  Stufe -> (Titel, Standard-Mahngebuehr, Zahlungsfrist in Tagen)
+DUNNING_LEVELS = {
+    1: ("Zahlungserinnerung", 0.0, 14),
+    2: ("1. Mahnung", 5.0, 10),
+    3: ("2. Mahnung", 10.0, 7),
+}
+
+
+def _smtp_send_pdf(cfg, to_addr, subject, body, pdf_bytes, pdf_name):
+    host       = cfg.get("smtp_host", "").strip()
+    port       = int(cfg.get("smtp_port", 587) or 587)
+    user       = cfg.get("smtp_user", "").strip()
+    pw         = cfg.get("smtp_pass", "")
+    from_name  = cfg.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+    from_email = (cfg.get("smtp_from_email", "") or user).strip()
+    if not host:
+        raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
+    msg = MIMEMultipart()
+    msg["From"]    = f"{from_name} <{from_email}>"
+    msg["To"]      = to_addr
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    pdf_part = MIMEBase("application", "pdf")
+    pdf_part.set_payload(pdf_bytes)
+    email_encoders.encode_base64(pdf_part)
+    pdf_part.add_header("Content-Disposition", f'attachment; filename="{pdf_name}"')
+    msg.attach(pdf_part)
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=20) as s:
+            s.login(user, pw)
+            s.sendmail(from_email, to_addr, msg.as_string())
+    else:
+        with smtplib.SMTP(host, port, timeout=20) as s:
+            s.ehlo(); s.starttls(); s.ehlo()
+            s.login(user, pw)
+            s.sendmail(from_email, to_addr, msg.as_string())
+
+
+def _dunning_context(iid, level, db):
+    invoice = db.execute("""SELECT i.*, c.name as customer_name, c.company as customer_company,
+                                   c.street, c.zip, c.city, c.email as customer_email, c.tax_id as customer_tax_id
+                            FROM invoices i JOIN customers c ON i.customer_id=c.id WHERE i.id=%s""", (iid,)).fetchone()
+    if not invoice:
+        return None
+    items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=%s", (iid,)).fetchall()
+    total = sum(it["quantity"] * it["unit_price"] for it in items)
+    cfg   = get_settings(db)
+    kleingewerbe = cfg.get("company_kleingewerbe") == "1"
+    grand_total  = total if kleingewerbe else total * 1.19
+    title, fee, days = DUNNING_LEVELS[level]
+    deadline = (date.today() + timedelta(days=days)).strftime("%d.%m.%Y")
+    return {"invoice": invoice, "total": grand_total, "cfg": cfg, "level": level,
+            "title": title, "fee": fee, "deadline": deadline,
+            "amount_due": grand_total + fee}
+
+
+def generate_dunning_pdf_bytes(iid, level, db):
+    from io import BytesIO
+    from xhtml2pdf import pisa
+    ctx = _dunning_context(iid, level, db)
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    html_str = render_template("dunning_pdf.html", doc_store=data_dir, **ctx)
+    buf = BytesIO()
+    pisa.CreatePDF(html_str.encode("utf-8"), dest=buf)
+    return buf.getvalue()
+
+
+@app.route("/mahnwesen")
+@login_required
+def dunning_list():
+    db = get_db()
+    rows = db.execute("""
+        SELECT i.id, i.number, i.date, i.due_date, c.name as customer_name, c.company, c.email as customer_email,
+               COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as total,
+               (CURRENT_DATE - i.due_date::date) as overdue_days,
+               COALESCE((SELECT MAX(level) FROM dunning_notices WHERE invoice_id=i.id),0) as dunning_level,
+               (SELECT MAX(sent_at) FROM dunning_notices WHERE invoice_id=i.id) as last_dunning
+        FROM invoices i JOIN customers c ON i.customer_id=c.id
+        WHERE i.status = 'sent' AND i.due_date IS NOT NULL AND i.due_date != '' AND i.due_date::date < CURRENT_DATE
+        ORDER BY overdue_days DESC
+    """).fetchall()
+    history = db.execute("""
+        SELECT d.*, i.number, c.name as customer_name, c.company
+        FROM dunning_notices d JOIN invoices i ON d.invoice_id=i.id JOIN customers c ON i.customer_id=c.id
+        ORDER BY d.sent_at DESC LIMIT 50
+    """).fetchall()
+    cfg = get_settings(db)
+    db.close()
+    return render_template("dunning.html", invoices=rows, history=history,
+                           levels=DUNNING_LEVELS, cfg=cfg)
+
+
+@app.route("/invoices/<int:iid>/dunning/<int:level>/pdf")
+@login_required
+def dunning_pdf(iid, level):
+    if level not in DUNNING_LEVELS:
+        abort(404)
+    db = get_db()
+    invoice = db.execute("SELECT number FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not invoice:
+        db.close()
+        abort(404)
+    try:
+        pdf = generate_dunning_pdf_bytes(iid, level, db)
+    finally:
+        db.close()
+    from flask import Response
+    fname = f"{DUNNING_LEVELS[level][0].replace(' ', '_').replace('.', '')}_{invoice['number']}.pdf"
+    disposition = "inline" if request.args.get("inline") else "attachment"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'{disposition}; filename="{fname}"'})
+
+
+@app.route("/invoices/<int:iid>/dunning/<int:level>/send", methods=["POST"])
+@login_required
+def dunning_send(iid, level):
+    if level not in DUNNING_LEVELS:
+        abort(404)
+    db = get_db()
+    ctx = _dunning_context(iid, level, db)
+    if not ctx:
+        db.close()
+        abort(404)
+    invoice = ctx["invoice"]
+    title   = ctx["title"]
+    via     = "manual"
+    to_addr = (invoice["customer_email"] or "").strip()
+    send_mail = request.form.get("send_email") == "1" and to_addr
+    try:
+        if send_mail:
+            body = (f"Sehr geehrte Damen und Herren,\n\n"
+                    f"zur Rechnung {invoice['number']} vom {invoice['date']} konnten wir noch keinen "
+                    f"Zahlungseingang feststellen. Details entnehmen Sie bitte dem Anhang.\n\n"
+                    f"Bitte begleichen Sie den offenen Betrag von {ctx['amount_due']:.2f} EUR "
+                    f"bis zum {ctx['deadline']}.\n\n"
+                    f"Sollte sich Ihre Zahlung mit diesem Schreiben überschnitten haben, "
+                    f"betrachten Sie es bitte als gegenstandslos.\n\n"
+                    f"Mit freundlichen Grüßen\n{ctx['cfg'].get('company_name','')}")
+            pdf_bytes = generate_dunning_pdf_bytes(iid, level, db)
+            fname = f"{title.replace(' ', '_').replace('.', '')}_{invoice['number']}.pdf"
+            _smtp_send_pdf(ctx["cfg"], to_addr, f"{title} zur Rechnung {invoice['number']}",
+                           body, pdf_bytes, fname)
+            via = "email"
+        db.execute("INSERT INTO dunning_notices (invoice_id, level, fee, deadline, sent_by, sent_via) VALUES (%s,%s,%s,%s,%s,%s)",
+                   (iid, level, ctx["fee"], ctx["deadline"], session["username"], via))
+        log_activity(db, "erstellt", "Mahnung", iid, invoice["number"], f"{title}" + (f" per E-Mail an {to_addr}" if via == "email" else ""))
+        db.commit()
+        if via == "email":
+            flash(f"{title} per E-Mail an {to_addr} gesendet ✓", "success")
+        else:
+            flash(f"{title} vermerkt — PDF kann heruntergeladen werden", "success")
+    except Exception as e:
+        flash(f"Fehler beim Mahnversand: {e}", "error")
+    db.close()
+    return redirect(url_for("dunning_list"))
+
+
+# ------------------------------------------------------------------ Angebote
+
+QUOTE_STATUS_LABELS = {"draft": "Entwurf", "sent": "Gesendet", "accepted": "Angenommen",
+                       "rejected": "Abgelehnt", "invoiced": "Abgerechnet"}
+
+
+def next_quote_number():
+    db = get_db()
+    row = db.execute("SELECT number FROM quotes ORDER BY id DESC LIMIT 1").fetchone()
+    db.close()
+    if not row:
+        return f"AN-{date.today().year}-001"
+    try:
+        num = int(row["number"].split("-")[-1]) + 1
+        return f"AN-{date.today().year}-{num:03d}"
+    except Exception:
+        return f"AN-{date.today().year}-001"
+
+
+@app.route("/angebote")
+@login_required
+def quotes():
+    db = get_db()
+    rows = db.execute("""
+        SELECT q.*, c.name as customer_name, c.company,
+               COALESCE((SELECT SUM(quantity*unit_price) FROM quote_items WHERE quote_id=q.id),0) as total
+        FROM quotes q JOIN customers c ON q.customer_id=c.id
+        ORDER BY q.created_at DESC
+    """).fetchall()
+    db.close()
+    return render_template("quotes.html", quotes=rows, status_labels=QUOTE_STATUS_LABELS)
+
+
+@app.route("/angebote/new", methods=["GET", "POST"])
+@login_required
+def quote_new():
+    db = get_db()
+    if request.method == "POST":
+        number = next_quote_number()
+        qid = db.execute("""INSERT INTO quotes (number, customer_id, date, valid_until, status, notes)
+                            VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+                         (number, request.form["customer_id"], request.form["date"],
+                          request.form.get("valid_until") or None, request.form["status"],
+                          request.form["notes"])).fetchone()["id"]
+        for desc, qty, price in zip(request.form.getlist("desc[]"),
+                                    request.form.getlist("qty[]"),
+                                    request.form.getlist("price[]")):
+            if desc.strip():
+                db.execute("INSERT INTO quote_items (quote_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
+                           (qid, desc, float(qty), float(price)))
+        log_activity(db, "erstellt", "Angebot", qid, number)
+        db.commit()
+        db.close()
+        flash(f"Angebot {number} erstellt", "success")
+        return redirect(url_for("quotes"))
+    customers = db.execute("SELECT * FROM customers ORDER BY name").fetchall()
+    articles  = db.execute("SELECT * FROM articles WHERE active=1 ORDER BY category, name").fetchall()
+    cfg = get_settings(db)
+    db.close()
+    default_valid = (date.today() + timedelta(days=30)).isoformat()
+    return render_template("quote_form.html", customers=customers, articles=articles, cfg=cfg,
+                           today=date.today().isoformat(), valid_until=default_valid,
+                           number=next_quote_number())
+
+
+@app.route("/angebote/<int:qid>")
+@login_required
+def quote_view(qid):
+    db = get_db()
+    quote = db.execute("""SELECT q.*, c.name as customer_name, c.company, c.street, c.zip, c.city,
+                                 c.email as customer_email, c.tax_id as customer_tax_id
+                          FROM quotes q JOIN customers c ON q.customer_id=c.id WHERE q.id=%s""", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
+    total = sum(it["quantity"] * it["unit_price"] for it in items)
+    cfg = get_settings(db)
+    db.close()
+    return render_template("quote_view.html", quote=quote, items=items, total=total, cfg=cfg,
+                           status_labels=QUOTE_STATUS_LABELS)
+
+
+def generate_quote_pdf_bytes(qid, db):
+    from io import BytesIO
+    from xhtml2pdf import pisa
+    quote = db.execute("""SELECT q.*, c.name as customer_name, c.company as customer_company,
+                                 c.street, c.zip, c.city, c.tax_id as customer_tax_id
+                          FROM quotes q JOIN customers c ON q.customer_id=c.id WHERE q.id=%s""", (qid,)).fetchone()
+    items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
+    total = sum(it["quantity"] * it["unit_price"] for it in items)
+    cfg   = get_settings(db)
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    html_str = render_template("quote_pdf.html", quote=quote, items=items, total=total, cfg=cfg,
+                               doc_store=data_dir)
+    buf = BytesIO()
+    pisa.CreatePDF(html_str.encode("utf-8"), dest=buf)
+    return buf.getvalue()
+
+
+@app.route("/angebote/<int:qid>/pdf")
+@login_required
+def quote_pdf(qid):
+    db = get_db()
+    quote = db.execute("SELECT number FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    try:
+        pdf = generate_quote_pdf_bytes(qid, db)
+    finally:
+        db.close()
+    from flask import Response
+    disposition = "inline" if request.args.get("inline") else "attachment"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'{disposition}; filename="Angebot_{quote["number"]}.pdf"'})
+
+
+@app.route("/angebote/<int:qid>/send-email", methods=["POST"])
+@login_required
+def quote_send_email(qid):
+    db = get_db()
+    quote = db.execute("""SELECT q.*, c.name as customer_name, c.email as customer_email
+                          FROM quotes q JOIN customers c ON q.customer_id=c.id WHERE q.id=%s""", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    to_addr = request.form.get("to_email", "").strip() or (quote["customer_email"] or "")
+    if not to_addr:
+        flash("Keine E-Mail-Adresse angegeben", "error")
+        db.close()
+        return redirect(url_for("quote_view", qid=qid))
+    try:
+        cfg = get_settings(db)
+        subject = request.form.get("subject", f"Angebot {quote['number']}").strip()
+        body = request.form.get("body", "").strip() or (
+            f"Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unser Angebot {quote['number']}.\n\n"
+            f"Mit freundlichen Grüßen\n{cfg.get('company_name','')}")
+        pdf_bytes = generate_quote_pdf_bytes(qid, db)
+        _smtp_send_pdf(cfg, to_addr, subject, body, pdf_bytes, f"Angebot_{quote['number']}.pdf")
+        if quote["status"] == "draft":
+            db.execute("UPDATE quotes SET status='sent' WHERE id=%s", (qid,))
+        log_activity(db, "versendet", "Angebot", qid, quote["number"], f"per E-Mail an {to_addr}")
+        db.commit()
+        flash(f"Angebot als PDF an {to_addr} gesendet ✓", "success")
+    except Exception as e:
+        flash(f"E-Mail-Fehler: {e}", "error")
+    db.close()
+    return redirect(url_for("quote_view", qid=qid))
+
+
+@app.route("/angebote/<int:qid>/status/<status>", methods=["POST"])
+@login_required
+def quote_status(qid, status):
+    if status not in QUOTE_STATUS_LABELS:
+        abort(400)
+    db = get_db()
+    quote = db.execute("SELECT number FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    db.execute("UPDATE quotes SET status=%s WHERE id=%s", (status, qid))
+    log_activity(db, "Status geändert", "Angebot", qid, quote["number"], f"neuer Status: {QUOTE_STATUS_LABELS[status]}")
+    db.commit()
+    db.close()
+    flash(f"Status: {QUOTE_STATUS_LABELS[status]}", "success")
+    return redirect(url_for("quote_view", qid=qid))
+
+
+@app.route("/angebote/<int:qid>/delete", methods=["POST"])
+@login_required
+def quote_delete(qid):
+    db = get_db()
+    quote = db.execute("SELECT number, status FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    db.execute("DELETE FROM quotes WHERE id=%s", (qid,))
+    log_activity(db, "gelöscht", "Angebot", qid, quote["number"])
+    db.commit()
+    db.close()
+    flash(f"Angebot {quote['number']} gelöscht", "success")
+    return redirect(url_for("quotes"))
+
+
+@app.route("/angebote/<int:qid>/to-invoice", methods=["POST"])
+@login_required
+def quote_to_invoice(qid):
+    db = get_db()
+    quote = db.execute("SELECT * FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not quote:
+        db.close()
+        abort(404)
+    if quote["invoice_id"]:
+        flash("Angebot wurde bereits abgerechnet", "error")
+        db.close()
+        return redirect(url_for("quote_view", qid=qid))
+    items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
+    number = next_invoice_number()
+    due = (date.today() + timedelta(days=14)).isoformat()
+    inv_id = db.execute("""INSERT INTO invoices (number, customer_id, date, due_date, status, notes)
+                           VALUES (%s,%s,%s,%s,'draft',%s) RETURNING id""",
+                        (number, quote["customer_id"], date.today().isoformat(), due,
+                         f"Basierend auf Angebot {quote['number']}")).fetchone()["id"]
+    for it in items:
+        db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
+                   (inv_id, it["description"], it["quantity"], it["unit_price"]))
+    db.execute("UPDATE quotes SET status='invoiced', invoice_id=%s WHERE id=%s", (inv_id, qid))
+    log_activity(db, "umgewandelt", "Angebot", qid, quote["number"], f"in Rechnung {number}")
+    db.commit()
+    db.close()
+    flash(f"Rechnung {number} aus Angebot {quote['number']} erstellt", "success")
+    return redirect(url_for("invoice_view", iid=inv_id))
 
 
 #  Sobald eine Rechnung tatsaechlich versendet oder bezahlt wurde, gilt sie als
@@ -1510,6 +1932,80 @@ def api_counts():
     return jsonify(tickets=tickets, invoices=invoices)
 
 
+NOTIF_PREF_KEYS = [
+    "notif_mention", "notif_new_ticket", "notif_new_invoice",
+    "notif_invoice_paid", "notif_new_promoter", "notif_payout", "notif_sound",
+]
+NOTIF_TYPE_TO_PREF = {
+    "mention": "notif_mention",
+    "new_ticket": "notif_new_ticket",
+    "new_invoice": "notif_new_invoice",
+    "invoice_paid": "notif_invoice_paid",
+    "promoter_register": "notif_new_promoter",
+    "payout_request": "notif_payout",
+}
+
+
+def get_user_notif_prefs(uid, db):
+    rows = db.execute(
+        "SELECT pref_key, pref_value FROM user_notification_prefs WHERE user_id=%s", (uid,)
+    ).fetchall()
+    prefs = {r["pref_key"]: r["pref_value"] for r in rows}
+    # Default all to enabled
+    return {k: prefs.get(k, "1") for k in NOTIF_PREF_KEYS}
+
+
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    uid = session["user_id"]
+    is_admin = session.get("role") == "admin"
+    db = get_db()
+    prefs = get_user_notif_prefs(uid, db)
+    if is_admin:
+        rows = db.execute(
+            """SELECT id, type, title, body, link FROM notifications
+               WHERE is_read=0 AND (target_user_id=%s OR target_user_id IS NULL)
+               ORDER BY created_at DESC LIMIT 20""", (uid,)
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """SELECT id, type, title, body, link FROM notifications
+               WHERE is_read=0 AND target_user_id=%s
+               ORDER BY created_at DESC LIMIT 20""", (uid,)
+        ).fetchall()
+    db.close()
+    # Filter by user prefs
+    result = []
+    for r in rows:
+        pref_key = NOTIF_TYPE_TO_PREF.get(r["type"])
+        if pref_key is None or prefs.get(pref_key, "1") == "1":
+            d = dict(r)
+            d["sound"] = prefs.get("notif_sound", "1")
+            result.append(d)
+    return jsonify(result[:10])
+
+
+@app.route("/api/notifications/<int:nid>/read", methods=["POST"])
+@login_required
+def api_notification_read(nid):
+    uid = session["user_id"]
+    db = get_db()
+    db.execute("UPDATE notifications SET is_read=1 WHERE id=%s AND (target_user_id=%s OR target_user_id IS NULL)", (nid, uid))
+    db.commit()
+    db.close()
+    return jsonify(ok=True)
+
+
+@app.route("/api/users")
+@login_required
+def api_users():
+    db = get_db()
+    rows = db.execute("SELECT username, display_name FROM users ORDER BY display_name").fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
+
+
 @app.route("/api/search")
 @login_required
 def api_search():
@@ -1530,8 +2026,19 @@ def api_search():
         SELECT i.id, i.number, i.status, c.name as customer_name, c.company as customer_company
         FROM invoices i JOIN customers c ON c.id = i.customer_id
         WHERE i.number ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s
+              OR i.notes ILIKE %s
+              OR EXISTS (SELECT 1 FROM invoice_items it WHERE it.invoice_id=i.id AND it.description ILIKE %s)
         ORDER BY i.created_at DESC LIMIT 6
-    """, (like, like, like)).fetchall()
+    """, (like, like, like, like, like)).fetchall()
+
+    quotes = db.execute("""
+        SELECT q.id, q.number, q.status, c.name as customer_name, c.company as customer_company
+        FROM quotes q JOIN customers c ON c.id = q.customer_id
+        WHERE q.number ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s
+              OR q.notes ILIKE %s
+              OR EXISTS (SELECT 1 FROM quote_items it WHERE it.quote_id=q.id AND it.description ILIKE %s)
+        ORDER BY q.created_at DESC LIMIT 6
+    """, (like, like, like, like, like)).fetchall()
 
     tickets = db.execute("""
         SELECT t.id, t.title, t.status, c.name as customer_name, c.company as customer_company
@@ -1539,6 +2046,18 @@ def api_search():
         WHERE t.title ILIKE %s OR t.description ILIKE %s
         ORDER BY t.created_at DESC LIMIT 6
     """, (like, like)).fetchall()
+
+    leads = db.execute("""
+        SELECT id, company, contact_name, contact_email, stage FROM leads
+        WHERE company ILIKE %s OR contact_name ILIKE %s OR contact_email ILIKE %s
+        ORDER BY id DESC LIMIT 6
+    """, (like, like, like)).fetchall()
+
+    articles = db.execute("""
+        SELECT id, name, description, unit_price FROM articles
+        WHERE active=1 AND (name ILIKE %s OR description ILIKE %s OR article_number ILIKE %s)
+        ORDER BY name LIMIT 6
+    """, (like, like, like)).fetchall()
 
     documents = db.execute("""
         SELECT id, name, parent_id FROM documents
@@ -1557,7 +2076,10 @@ def api_search():
     return jsonify(
         customers=[dict(r) for r in customers],
         invoices=[dict(r) for r in invoices],
+        quotes=[dict(r) for r in quotes],
         tickets=[dict(r) for r in tickets],
+        leads=[dict(r) for r in leads],
+        articles=[dict(r) for r in articles],
         documents=[dict(r) for r in documents],
         contracts=[dict(r) for r in contracts],
     )
@@ -1675,8 +2197,9 @@ def backup():
 def profile():
     db = get_db()
     user = db.execute("SELECT * FROM users WHERE id=%s", (session["user_id"],)).fetchone()
+    notif_prefs = get_user_notif_prefs(session["user_id"], db)
     db.close()
-    return render_template("profile.html", user=user)
+    return render_template("profile.html", user=user, notif_prefs=notif_prefs)
 
 
 @app.route("/favicon.ico")
@@ -1695,6 +2218,9 @@ def activity_log():
 
     entity_type = request.args.get("entity_type", "")
     username    = request.args.get("username", "")
+    q           = request.args.get("q", "").strip()
+    date_from   = request.args.get("date_from", "")
+    date_to     = request.args.get("date_to", "")
     page        = max(int(request.args.get("page", 1) or 1), 1)
     per_page    = 50
 
@@ -1706,6 +2232,16 @@ def activity_log():
     if username:
         where.append("username = %s")
         params.append(username)
+    if q:
+        where.append("(entity_label ILIKE %s OR details ILIKE %s OR action ILIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like])
+    if date_from:
+        where.append("created_at >= %s")
+        params.append(date_from)
+    if date_to:
+        where.append("created_at < %s::date + INTERVAL '1 day'")
+        params.append(date_to)
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     total = db.execute(f"SELECT COUNT(*) FROM audit_log {where_sql}", params).fetchone()[0]
@@ -1722,6 +2258,7 @@ def activity_log():
     db.close()
     return render_template("activity_log.html", rows=rows, entity_types=entity_types,
                            usernames=usernames, entity_type=entity_type, username=username,
+                           q=q, date_from=date_from, date_to=date_to,
                            page=page, total=total, per_page=per_page)
 
 
@@ -1859,6 +2396,9 @@ app.jinja_env.globals["shade_hex"] = _shade_hex
 @login_required
 def settings():
     db = get_db()
+    if request.method == "POST" and session.get("role") != "admin":
+        db.close()
+        abort(403)
     if request.method == "POST":
         tab  = request.form.get("_tab", "")
         keys = SETTING_KEYS_BY_TAB.get(tab, sum(SETTING_KEYS_BY_TAB.values(), []))
@@ -1868,8 +2408,29 @@ def settings():
         db.commit()
         flash("Einstellungen gespeichert", "success")
     cfg = get_settings(db)
+    uid = session["user_id"]
+    notif_prefs = get_user_notif_prefs(uid, db)
     db.close()
-    return render_template("settings.html", cfg=cfg)
+    return render_template("settings.html", cfg=cfg, notif_prefs=notif_prefs)
+
+
+@app.route("/settings/notifications", methods=["POST"])
+@login_required
+def settings_notifications():
+    db = get_db()
+    uid = session["user_id"]
+    for key in NOTIF_PREF_KEYS:
+        val = "1" if request.form.get(key) else "0"
+        db.execute(
+            """INSERT INTO user_notification_prefs (user_id, pref_key, pref_value)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (user_id, pref_key) DO UPDATE SET pref_value=%s""",
+            (uid, key, val, val)
+        )
+    db.commit()
+    db.close()
+    flash("Benachrichtigungseinstellungen gespeichert", "success")
+    return redirect(url_for("settings") + "#benachrichtigungen")
 
 
 def _save_logo_file(file_obj, key_prefix):
@@ -2193,7 +2754,7 @@ def promoter_register(token):
         db.close()
         return render_template("promoter_register.html", error="Ungültiger oder bereits verwendeter Link.")
     # Token expires after 72 hours
-    created = datetime.strptime(tok["created_at"][:19], "%Y-%m-%d %H:%M:%S")
+    created = tok["created_at"] if isinstance(tok["created_at"], datetime) else datetime.strptime(str(tok["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
     if datetime.utcnow() - created > timedelta(hours=72):
         db.close()
         return render_template("promoter_register.html", error="Dieser Link ist abgelaufen (72h). Bitte neuen Link anfordern.")
@@ -2214,6 +2775,11 @@ def promoter_register(token):
             (username, phash, display or username, "promoter")).fetchone()["id"]
         db.execute("UPDATE promoter_tokens SET used_by=%s, used_at=CURRENT_TIMESTAMP WHERE id=%s",
                    (new_uid, tok["id"]))
+        db.execute(
+            "INSERT INTO notifications (type, title, body, link) VALUES (%s,%s,%s,%s)",
+            ("promoter_register", "Neuer Promoter registriert",
+             f"{display or username} hat sich als Promoter registriert.",
+             f"/promoters/{new_uid}"))
         db.commit()
         db.close()
         flash("Registrierung erfolgreich – bitte anmelden.", "success")
@@ -2382,6 +2948,60 @@ def promoter_payout_decide(poid):
 
 # ── Promoter-eigenes Dashboard ─────────────────────────────────────────────────
 
+# ------------------------------------------------------------ Referral-Links
+
+def _get_or_create_referral(pid, db):
+    row = db.execute("SELECT * FROM referral_links WHERE promoter_id=%s", (pid,)).fetchone()
+    if row:
+        return row
+    code = secrets.token_urlsafe(6)
+    while db.execute("SELECT 1 FROM referral_links WHERE code=%s", (code,)).fetchone():
+        code = secrets.token_urlsafe(6)
+    db.execute("INSERT INTO referral_links (promoter_id, code) VALUES (%s,%s)", (pid, code))
+    db.commit()
+    return db.execute("SELECT * FROM referral_links WHERE promoter_id=%s", (pid,)).fetchone()
+
+
+@app.route("/r/<code>", methods=["GET", "POST"])
+def referral_landing(code):
+    db = get_db()
+    ref = db.execute("""SELECT r.*, u.display_name, u.username FROM referral_links r
+                        JOIN users u ON u.id = r.promoter_id WHERE r.code=%s""", (code,)).fetchone()
+    if not ref:
+        db.close()
+        abort(404)
+    cfg = get_settings(db)
+    if request.method == "POST":
+        name    = request.form.get("name", "").strip()
+        company = request.form.get("company", "").strip()
+        email_a = request.form.get("email", "").strip()
+        phone   = request.form.get("phone", "").strip()
+        message = request.form.get("message", "").strip()
+        if not name or not (email_a or phone):
+            db.close()
+            return render_template("referral_landing.html", ref=ref, cfg=cfg,
+                                   error="Bitte Name und E-Mail oder Telefon angeben.", sent=False)
+        db.execute("""INSERT INTO referral_leads (referral_id, name, company, email, phone, message)
+                      VALUES (%s,%s,%s,%s,%s,%s)""",
+                   (ref["id"], name, company, email_a, phone, message))
+        promoter_name = ref["display_name"] or ref["username"]
+        db.execute("""INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes)
+                      VALUES (%s,%s,%s,%s,%s,%s)""",
+                   (company or None, name, email_a or None, phone or None, "Empfehlung",
+                    f"Über Referral-Link von {promoter_name}." + (f"\n\nNachricht: {message}" if message else "")))
+        db.execute("INSERT INTO notifications (type, title, body, link) VALUES (%s,%s,%s,%s)",
+                   ("promoter_register", "Neue Empfehlung eingegangen",
+                    f"{name}{' (' + company + ')' if company else ''} über Referral-Link von {promoter_name}.",
+                    "/akquise"))
+        db.commit()
+        db.close()
+        return render_template("referral_landing.html", ref=ref, cfg=cfg, error=None, sent=True)
+    db.execute("UPDATE referral_links SET clicks = clicks + 1 WHERE id=%s", (ref["id"],))
+    db.commit()
+    db.close()
+    return render_template("referral_landing.html", ref=ref, cfg=cfg, error=None, sent=False)
+
+
 @app.route("/promoter")
 @login_required
 def promoter_dashboard():
@@ -2417,10 +3037,15 @@ def promoter_dashboard():
     total_paid    = sum(p["amount"] for p in payouts if p["status"] == "approved")
     total_pending = sum(p["amount"] for p in payouts if p["status"] == "pending")
     balance       = total_earned - total_paid - total_pending
+    referral = _get_or_create_referral(pid, db)
+    referral_leads = db.execute(
+        "SELECT * FROM referral_leads WHERE referral_id=%s ORDER BY created_at DESC LIMIT 20",
+        (referral["id"],)).fetchall()
     db.close()
     return render_template("promoter_dashboard.html",
                            commissions=commissions, payouts=payouts,
                            assignments=assignments,
+                           referral=referral, referral_leads=referral_leads,
                            total_earned=total_earned, total_paid=total_paid,
                            total_pending=total_pending, balance=balance)
 
@@ -3246,6 +3871,31 @@ STAGE_KEYS = [s[0] for s in LEAD_STAGES]
 
 LEAD_SOURCES = ["Website", "Empfehlung", "Kaltakquise", "LinkedIn", "Messe", "Promoter", "Sonstiges"]
 
+#  Abschlusswahrscheinlichkeit je Phase — fuer den gewichteten Pipeline-Forecast
+STAGE_PROBABILITY = {"new": 0.10, "contacted": 0.25, "proposal": 0.50, "negotiation": 0.75}
+
+_HIGH_QUALITY_SOURCES = ("Empfehlung", "Promoter")
+
+
+def _score_lead(l, today_d):
+    """Regelbasierter Lead-Score 0-100: Deal-Wert, Phase, Quelle, Aktivität, Wiedervorlage."""
+    score = 0
+    v = l["deal_value"] or 0
+    if v >= 5000:  score += 25
+    elif v >= 1000: score += 18
+    elif v > 0:     score += 8
+    score += {"new": 5, "contacted": 15, "proposal": 28, "negotiation": 38}.get(l["stage"], 0)
+    if l["source"] in _HIGH_QUALITY_SOURCES:
+        score += 12
+    if l["next_followup"]:
+        score += 8
+    la = l["last_activity_at"]
+    if la:
+        la_d = la.date() if hasattr(la, "date") else None
+        if la_d and (today_d - la_d).days <= 7:
+            score += 17
+    return min(score, 100)
+
 
 @app.route("/akquise")
 @login_required
@@ -3258,34 +3908,98 @@ def akquise():
         FROM leads l ORDER BY l.updated_at DESC
     """).fetchall()
 
-    # KPIs
-    total       = len(leads)
-    won         = sum(1 for l in leads if l["stage"] == "won")
-    active      = sum(1 for l in leads if l["stage"] not in ("won", "lost"))
-    pipeline_val= sum(l["deal_value"] or 0 for l in leads if l["stage"] not in ("won", "lost"))
-    won_val     = sum(l["deal_value"] or 0 for l in leads if l["stage"] == "won")
-    conv_rate   = round(won / total * 100) if total else 0
+    today_d = date.today()
+    today   = today_d.isoformat()
 
-    # Group by stage for kanban
+    enriched = []
+    for l in leads:
+        d = dict(l)
+        d["score"] = _score_lead(l, today_d)
+        # Tage seit letzter Bewegung (Aktivität oder Update)
+        ref = l["last_activity_at"] or l["updated_at"]
+        try:
+            d["days_inactive"] = (today_d - ref.date()).days if ref else None
+        except Exception:
+            d["days_inactive"] = None
+        enriched.append(d)
+
+    # KPIs
+    total        = len(enriched)
+    won          = sum(1 for l in enriched if l["stage"] == "won")
+    lost         = sum(1 for l in enriched if l["stage"] == "lost")
+    active       = sum(1 for l in enriched if l["stage"] not in ("won", "lost"))
+    pipeline_val = sum(l["deal_value"] or 0 for l in enriched if l["stage"] not in ("won", "lost"))
+    weighted_val = sum((l["deal_value"] or 0) * STAGE_PROBABILITY.get(l["stage"], 0)
+                       for l in enriched if l["stage"] not in ("won", "lost"))
+    won_val      = sum(l["deal_value"] or 0 for l in enriched if l["stage"] == "won")
+    closed       = won + lost
+    conv_rate    = round(won / closed * 100) if closed else 0
+    hot_leads    = sum(1 for l in enriched if l["stage"] not in ("won", "lost") and l["score"] >= 60)
+    stale        = [l for l in enriched if l["stage"] not in ("won", "lost")
+                    and (l["days_inactive"] or 0) >= 14]
+
     from collections import defaultdict
     by_stage = defaultdict(list)
-    for l in leads:
-        by_stage[l["stage"]].append(dict(l))
+    for l in enriched:
+        by_stage[l["stage"]].append(l)
+    # Heiße Leads zuerst innerhalb jeder Spalte
+    for k in by_stage:
+        by_stage[k].sort(key=lambda x: -x["score"])
 
-    # Overdue follow-ups
-    today = date.today().isoformat()
-    overdue = [l for l in leads if l["next_followup"] and l["next_followup"] < today
-               and l["stage"] not in ("won", "lost")]
+    overdue   = [l for l in enriched if l["next_followup"] and l["next_followup"] < today
+                 and l["stage"] not in ("won", "lost")]
+    due_today = [l for l in enriched if l["next_followup"] == today
+                 and l["stage"] not in ("won", "lost")]
+
+    # Quellen-Performance: Leads, gewonnen, Win-Rate je Quelle
+    src_stats = {}
+    for l in enriched:
+        s = l["source"] or "Sonstiges"
+        st = src_stats.setdefault(s, {"total": 0, "won": 0, "value": 0.0})
+        st["total"] += 1
+        if l["stage"] == "won":
+            st["won"] += 1
+            st["value"] += l["deal_value"] or 0
+    source_perf = sorted(
+        [{"source": k, **v, "rate": round(v["won"] / v["total"] * 100) if v["total"] else 0}
+         for k, v in src_stats.items()],
+        key=lambda x: (-x["won"], -x["total"]))
+
+    # Verlustgründe
+    loss_counts = {}
+    for l in enriched:
+        if l["stage"] == "lost" and l["lost_reason"]:
+            loss_counts[l["lost_reason"]] = loss_counts.get(l["lost_reason"], 0) + 1
+    loss_reasons = sorted(loss_counts.items(), key=lambda x: -x[1])[:6]
 
     db.close()
     return render_template("akquise.html",
-                           leads=leads, by_stage=by_stage,
+                           leads=enriched, by_stage=by_stage,
                            stages=LEAD_STAGES, stage_keys=STAGE_KEYS,
                            sources=LEAD_SOURCES,
                            kpi=dict(total=total, won=won, active=active,
-                                    pipeline_val=pipeline_val, won_val=won_val,
-                                    conv_rate=conv_rate),
-                           overdue=overdue, today=today)
+                                    pipeline_val=pipeline_val, weighted_val=weighted_val,
+                                    won_val=won_val, conv_rate=conv_rate, hot=hot_leads),
+                           overdue=overdue, due_today=due_today, stale=stale,
+                           source_perf=source_perf, loss_reasons=loss_reasons,
+                           today=today)
+
+
+@app.route("/akquise/<int:lid>/snooze/<int:days>", methods=["POST"])
+@login_required
+def akquise_snooze(lid, days):
+    """Wiedervorlage schnell um X Tage nach vorn schieben."""
+    if days not in (1, 3, 7, 14):
+        abort(400)
+    new_date = (date.today() + timedelta(days=days)).isoformat()
+    db = get_db()
+    db.execute("UPDATE leads SET next_followup=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+               (new_date, lid))
+    db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
+               (lid, "note", f"Wiedervorlage verschoben auf {new_date}", session["username"]))
+    db.commit()
+    db.close()
+    return redirect(request.referrer or url_for("akquise"))
 
 
 @app.route("/akquise/new", methods=["POST"])
