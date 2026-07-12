@@ -76,25 +76,50 @@
   </div>
 
   <h2 class="text-lg font-semibold text-gray-800 mb-1">{{ contract.title }}</h2>
-  <p class="text-sm text-gray-400 mb-6">Vertragspartner: {{ contract.customer_company or contract.customer_name }}</p>
+  <p class="text-xs text-gray-400 mb-6">Vertrags-Nr. {{ contract.number }}</p>
+
+  <!-- Vertragsparteien -->
+  <div class="grid grid-cols-2 divide-x divide-gray-200 bg-gray-50 rounded-xl mb-8 overflow-hidden">
+    <div class="px-5 py-4">
+      <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Auftragnehmer</p>
+      <p class="text-sm font-semibold text-gray-800">{{ cfg.get('company_name','') }}</p>
+      <p class="text-xs text-gray-500 mt-0.5">
+        {% if cfg.get('company_street') %}{{ cfg.get('company_street') }}<br>{% endif %}
+        {% if cfg.get('company_zip') or cfg.get('company_city') %}{{ cfg.get('company_zip','') }} {{ cfg.get('company_city','') }}{% endif %}
+      </p>
+    </div>
+    <div class="px-5 py-4">
+      <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Auftraggeber</p>
+      <p class="text-sm font-semibold text-gray-800">{{ contract.customer_company or contract.customer_name }}</p>
+      {% if contract.customer_company %}<p class="text-xs text-gray-500 mt-0.5">{{ contract.customer_name }}</p>{% endif %}
+    </div>
+  </div>
 
   <!-- Body -->
-  <div class="text-sm text-gray-700 leading-relaxed mb-10" style="white-space: pre-wrap;">{{ contract.body }}</div>
+  <div class="text-sm text-gray-700 leading-relaxed mb-10 space-y-3" style="text-align: justify;">
+    {% for para in contract.body.split('\n\n') %}
+      {% if para.strip() %}
+      <p>{{ para.strip() | e | replace('\n', '<br>') | safe }}</p>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <p class="text-xs text-gray-400 mb-4">Durch ihre Unterschrift bestätigen beide Vertragsparteien die Gültigkeit der vorstehenden Vereinbarung.</p>
 
   <!-- Signature block -->
-  <div class="grid grid-cols-2 gap-10 pt-8 border-t border-gray-100">
+  <div class="grid grid-cols-2 gap-10 pt-6 border-t border-gray-100">
     <div>
       <div class="border-b border-gray-400 h-16"></div>
-      <p class="text-xs text-gray-500 mt-1">Ort, Datum, Unterschrift — {{ cfg.get('company_name','') }}</p>
+      <p class="text-xs font-medium text-gray-600 mt-1">{{ cfg.get('company_name','') }}</p>
+      <p class="text-[11px] text-gray-400">Ort, Datum, Unterschrift, Name in Druckbuchstaben</p>
     </div>
     <div>
       <div class="border-b border-gray-400 h-16"></div>
-      <p class="text-xs text-gray-500 mt-1">
-        Ort, Datum, Unterschrift — {{ contract.customer_company or contract.customer_name }}
-        {% if contract.status == 'signed' %}
-        <br><span class="text-emerald-600 font-medium">Digital erfasst: {{ contract.signed_by_name }} am {{ contract.signed_at | fmtdate }}</span>
-        {% endif %}
-      </p>
+      <p class="text-xs font-medium text-gray-600 mt-1">{{ contract.customer_company or contract.customer_name }}</p>
+      <p class="text-[11px] text-gray-400">Ort, Datum, Unterschrift, Name in Druckbuchstaben</p>
+      {% if contract.status == 'signed' %}
+      <p class="text-xs text-emerald-600 font-medium mt-1">Digital erfasst: {{ contract.signed_by_name }} am {{ contract.signed_at | fmtdate }}</p>
+      {% endif %}
     </div>
   </div>
 </div>

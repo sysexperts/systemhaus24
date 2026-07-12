@@ -3,38 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: A4; margin: 2cm 2.2cm 2.4cm 2.2cm; }
+  @page { size: A4; margin: 2.2cm 2.5cm 2.6cm 2.5cm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
+  body { font-family: Georgia, "Times New Roman", serif; font-size: 10.5pt; color: #2b2b2b; }
 
-  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 0.9cm; }
-  .header-table td { vertical-align: top; padding: 0; }
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 0.8cm; }
+  .header-table td { vertical-align: top; padding: 0; font-family: Helvetica, Arial, sans-serif; }
   .header-table td.right { text-align: right; }
-  .company-name { font-size: 12.5pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
-  .company-details { font-size: 8.5pt; color: #888; line-height: 1.6; }
-  .doc-title { font-size: 20pt; font-weight: bold; color: #1c3461; letter-spacing: 3pt; margin-bottom: 8pt; }
-  .doc-number { font-size: 9.5pt; color: #999; font-family: Courier, monospace; }
+  .company-name { font-size: 12pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
+  .company-details { font-size: 8pt; color: #888; line-height: 1.55; }
+  .doc-title { font-size: 18pt; font-weight: bold; color: #1c3461; letter-spacing: 3.5pt; margin-bottom: 6pt; }
+  .doc-number { font-size: 9pt; color: #999; font-family: Courier, monospace; }
 
-  .status-badge { display: inline-block; font-size: 7.5pt; font-weight: bold; letter-spacing: 0.5pt;
-                  text-transform: uppercase; padding: 3pt 9pt; border-radius: 9pt; margin-top: 6pt; }
+  .status-badge { display: inline-block; font-size: 7pt; font-weight: bold; letter-spacing: 0.5pt;
+                  text-transform: uppercase; padding: 3pt 9pt; border-radius: 9pt; margin-top: 6pt;
+                  font-family: Helvetica, Arial, sans-serif; }
   .status-signed { background: #dcf5e6; color: #1a7a42; }
   .status-sent { background: #dbe7fb; color: #1c4fa6; }
   .status-cancelled { background: #fbdcdc; color: #a61c1c; }
   .status-draft { background: #eee; color: #888; }
 
-  .title-block { margin-bottom: 0.7cm; }
-  .contract-title { font-size: 13pt; font-weight: bold; color: #222; margin-bottom: 3pt; }
-  .contract-sub { font-size: 9pt; color: #888; }
+  .divider { border: none; border-top: 1.5pt solid #1c3461; margin-bottom: 0.6cm; }
 
-  .body-text { font-size: 9.5pt; line-height: 1.7; color: #333; white-space: pre-wrap; margin-bottom: 1cm; }
+  .title-block { margin-bottom: 0.5cm; font-family: Helvetica, Arial, sans-serif; }
+  .contract-title { font-size: 14pt; font-weight: bold; color: #1a1a1a; margin-bottom: 2pt; }
+  .contract-number-line { font-size: 8pt; color: #999; }
 
-  .sig-table { width: 100%; border-collapse: collapse; margin-top: 1.2cm; }
-  .sig-table td { width: 50%; padding-right: 20pt; vertical-align: top; }
-  .sig-line { border-bottom: 1px solid #999; height: 40pt; }
-  .sig-label { font-size: 8pt; color: #777; margin-top: 4pt; }
-  .sig-signed { font-size: 8pt; color: #1a7a42; margin-top: 2pt; font-weight: bold; }
+  /* Parties block */
+  .parties-table { width: 100%; border-collapse: collapse; margin-bottom: 0.9cm; background: #f7f8fa; }
+  .parties-table td { padding: 12pt 14pt; vertical-align: top; width: 240pt; font-family: Helvetica, Arial, sans-serif; }
+  .parties-table td.divider-col { width: 1pt; padding: 0; background: #e2e4e9; }
+  .party-label { font-size: 7pt; color: #9aa0ab; text-transform: uppercase; letter-spacing: 1pt; margin-bottom: 4pt; }
+  .party-name { font-size: 10pt; font-weight: bold; color: #1a1a1a; margin-bottom: 2pt; }
+  .party-detail { font-size: 8pt; color: #666; line-height: 1.5; }
 
-  .logo { max-height: 46pt; max-width: 150pt; }
+  .body-text p { font-size: 10pt; line-height: 1.65; color: #2b2b2b; margin-bottom: 9pt; text-align: justify; }
+  .body-text { margin-bottom: 0.9cm; }
+
+  .sig-intro { font-size: 8.5pt; color: #888; margin-bottom: 0.5cm; font-family: Helvetica, Arial, sans-serif; }
+  .sig-table { width: 100%; border-collapse: collapse; margin-top: 0.3cm; font-family: Helvetica, Arial, sans-serif; }
+  .sig-table td { width: 50%; padding-right: 24pt; vertical-align: top; }
+  .sig-line { border-bottom: 1pt solid #999; height: 42pt; }
+  .sig-label { font-size: 8pt; color: #777; margin-top: 5pt; font-weight: bold; }
+  .sig-sub { font-size: 7.5pt; color: #aaa; margin-top: 1pt; }
+  .sig-signed { font-size: 8pt; color: #1a7a42; margin-top: 4pt; font-weight: bold; }
+
+  .footer-note { text-align: center; font-size: 7.5pt; color: #b0b3bd; margin-top: 1.2cm;
+                 font-family: Helvetica, Arial, sans-serif; }
+
+  .logo { max-height: 42pt; max-width: 140pt; }
 </style>
 </head>
 <body>
@@ -54,7 +71,7 @@
     </td>
     <td class="right" style="width:45%">
       <div class="doc-title">VERTRAG</div>
-      <div class="doc-number">{{ contract.number }}</div>
+      <div class="doc-number">{{ contract.number }}</div><br>
       <div class="status-badge status-{{ contract.status }}">
         {{ {'draft':'Entwurf','sent':'Gesendet','signed':'Unterschrieben','cancelled':'Storniert'}.get(contract.status, contract.status) }}
       </div>
@@ -62,28 +79,64 @@
   </tr>
 </table>
 
+<hr class="divider">
+
 <div class="title-block">
   <div class="contract-title">{{ contract.title }}</div>
-  <div class="contract-sub">Vertragspartner: {{ contract.customer_company or contract.customer_name }}</div>
+  <div class="contract-number-line">Vertrags-Nr. {{ contract.number }}</div>
 </div>
 
-<div class="body-text">{{ contract.body }}</div>
+<!-- Vertragsparteien -->
+<table class="parties-table">
+  <tr>
+    <td>
+      <div class="party-label">Auftragnehmer</div>
+      <div class="party-name">{{ cfg.get('company_name','') }}</div>
+      <div class="party-detail">
+        {% if cfg.get('company_street') %}{{ cfg.get('company_street') }}<br>{% endif %}
+        {% if cfg.get('company_zip') or cfg.get('company_city') %}{{ cfg.get('company_zip','') }} {{ cfg.get('company_city','') }}{% endif %}
+      </div>
+    </td>
+    <td class="divider-col"></td>
+    <td>
+      <div class="party-label">Auftraggeber</div>
+      <div class="party-name">{{ contract.customer_company or contract.customer_name }}</div>
+      <div class="party-detail">
+        {% if contract.customer_company %}{{ contract.customer_name }}<br>{% endif %}
+      </div>
+    </td>
+  </tr>
+</table>
+
+<div class="body-text">
+  {% for para in contract.body.split('\n\n') %}
+  {% if para.strip() %}
+  <p>{{ para.strip() | e | replace('\n', '<br>') | safe }}</p>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<p class="sig-intro">Durch ihre Unterschrift bestätigen beide Vertragsparteien die Gültigkeit der vorstehenden Vereinbarung.</p>
 
 <table class="sig-table">
   <tr>
     <td>
       <div class="sig-line"></div>
-      <div class="sig-label">Ort, Datum, Unterschrift — {{ cfg.get('company_name','') }}</div>
+      <div class="sig-label">{{ cfg.get('company_name','') }}</div>
+      <div class="sig-sub">Ort, Datum, Unterschrift, Name in Druckbuchstaben</div>
     </td>
     <td>
       <div class="sig-line"></div>
-      <div class="sig-label">Ort, Datum, Unterschrift — {{ contract.customer_company or contract.customer_name }}</div>
+      <div class="sig-label">{{ contract.customer_company or contract.customer_name }}</div>
+      <div class="sig-sub">Ort, Datum, Unterschrift, Name in Druckbuchstaben</div>
       {% if contract.status == 'signed' %}
       <div class="sig-signed">Digital erfasst: {{ contract.signed_by_name }} am {{ contract.signed_at | fmtdate }}</div>
       {% endif %}
     </td>
   </tr>
 </table>
+
+<div class="footer-note">{{ cfg.get('company_name','') }} · {{ contract.number }}</div>
 
 </body>
 </html>
