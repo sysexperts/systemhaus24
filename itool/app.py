@@ -3512,6 +3512,7 @@ def recurring_delete(rid):
     return redirect(url_for("recurring_list"))
 
 
+
 # ── Verträge ──────────────────────────────────────────────────────────────────
 
 CONTRACT_PLACEHOLDERS = [
@@ -3855,6 +3856,7 @@ def contract_delete(cid):
     db.close()
     flash("Vertrag gelöscht", "success")
     return redirect(url_for("contracts_list"))
+
 
 
 # ── Akquise / Lead Pipeline ───────────────────────────────────────────────────

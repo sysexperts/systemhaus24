@@ -443,8 +443,82 @@ def init_db():
     conn.commit()
 
     _safe_alter(conn, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)")
-    _safe_alter(conn, "ALTER TABLE user_notification_prefs ADD COLUMN IF NOT EXISTS pref_value TEXT NOT NULL DEFAULT '1'")
 
+
+
+
+
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS user_notification_prefs (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            pref_key TEXT NOT NULL,
+            pref_value TEXT NOT NULL DEFAULT '1',
+            PRIMARY KEY (user_id, pref_key)
+        )""")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS dunning_notices (
+            id SERIAL PRIMARY KEY,
+            invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+            level INTEGER NOT NULL,
+            fee REAL DEFAULT 0,
+            deadline TEXT,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_by TEXT,
+            sent_via TEXT DEFAULT 'manual'
+        )""")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS quotes (
+            id SERIAL PRIMARY KEY,
+            number TEXT UNIQUE NOT NULL,
+            customer_id INTEGER NOT NULL REFERENCES customers(id),
+            date TEXT NOT NULL,
+            valid_until TEXT,
+            status TEXT DEFAULT 'draft',
+            notes TEXT,
+            invoice_id INTEGER REFERENCES invoices(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS quote_items (
+            id SERIAL PRIMARY KEY,
+            quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+            description TEXT NOT NULL,
+            quantity REAL DEFAULT 1,
+            unit_price REAL NOT NULL
+        )""")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS referral_links (
+            id SERIAL PRIMARY KEY,
+            promoter_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            code TEXT UNIQUE NOT NULL,
+            clicks INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS referral_leads (
+            id SERIAL PRIMARY KEY,
+            referral_id INTEGER NOT NULL REFERENCES referral_links(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            company TEXT,
+            email TEXT,
+            phone TEXT,
+            message TEXT,
+            status TEXT DEFAULT 'new',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""")
+        conn.commit()
+    except Exception:
+        conn.rollback()
     conn.close()
 
 
