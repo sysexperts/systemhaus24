@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Neuer Vertrag – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-3 mb-5">
+  <a href="{{ url_for('contracts_list') }}" class="text-sm text-gray-400 hover:text-gray-600">← Verträge</a>
+</div>
+
+<h1 class="text-lg font-semibold text-gray-600 mb-5">Neuer Vertrag</h1>
+
+<form method="POST" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-4xl">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+  <div class="grid grid-cols-3 gap-4 mb-5">
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Vorlage</label>
+      <select name="template_id" id="template-select" onchange="loadPreview()"
+              class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <option value="">— Ohne Vorlage (leer) —</option>
+        {% for t in templates %}
+        <option value="{{ t.id }}" {% if request.args.get('template_id')|string == t.id|string %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Kunde *</label>
+      <select name="customer_id" id="customer-select" required onchange="loadPreview()"
+              class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <option value="">— Kunde wählen —</option>
+        {% for c in customers %}
+        <option value="{{ c.id }}">{{ c.company or c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-400 mb-1">Titel</label>
+      <input name="title" id="title-input" placeholder="{{ number }}"
+             class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+    </div>
+  </div>
+
+  <label class="block text-xs text-gray-400 mb-1">Vertragstext (Platzhalter wurden bereits mit den Kundendaten befüllt — hier noch anpassbar)</label>
+  <textarea name="body" id="body-textarea" rows="18"
+            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-400"
+            placeholder="Vorlage und Kunde auswählen, um den Vertragstext automatisch zu befüllen…"></textarea>
+  <p id="loading-hint" class="hidden text-xs text-gray-400 mt-1">Lade Vorschau…</p>
+
+  <div class="flex gap-3 mt-5">
+    <button type="submit" class="bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Vertrag erstellen
+    </button>
+    <a href="{{ url_for('contracts_list') }}" class="px-6 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">
+      Abbrechen
+    </a>
+  </div>
+</form>
+
+<script>
+function loadPreview() {
+  const templateId = document.getElementById('template-select').value;
+  const customerId = document.getElementById('customer-select').value;
+  const body = document.getElementById('body-textarea');
+  const hint = document.getElementById('loading-hint');
+  const titleInput = document.getElementById('title-input');
+
+  if (!templateId) return; // no template chosen -> leave body as-is for free-hand entry
+
+  hint.classList.remove('hidden');
+  fetch(`/api/contract-preview?template_id=${templateId}&customer_id=${customerId}`)
+    .then(r => r.json())
+    .then(data => {
+      body.value = data.body || '';
+      if (!titleInput.value) titleInput.value = data.title || '';
+      hint.classList.add('hidden');
+    })
+    .catch(() => hint.classList.add('hidden'));
+}
+
+// Auto-trigger if a template was pre-selected via query string
+if (document.getElementById('template-select').value) {
+  loadPreview();
+}
+</script>
+{% endblock %}

@@ -1515,7 +1515,7 @@ def api_counts():
 def api_search():
     q = request.args.get("q", "").strip()
     if len(q) < 2:
-        return jsonify(customers=[], invoices=[], tickets=[], documents=[])
+        return jsonify(customers=[], invoices=[], tickets=[], documents=[], contracts=[])
 
     like = f"%{q}%"
     db = get_db()
@@ -1546,12 +1546,20 @@ def api_search():
         ORDER BY created_at DESC LIMIT 6
     """, (like,)).fetchall()
 
+    contracts = db.execute("""
+        SELECT c.id, c.number, c.title, c.status, cu.name as customer_name, cu.company as customer_company
+        FROM contracts c JOIN customers cu ON cu.id = c.customer_id
+        WHERE c.number ILIKE %s OR c.title ILIKE %s OR cu.name ILIKE %s OR cu.company ILIKE %s
+        ORDER BY c.created_at DESC LIMIT 6
+    """, (like, like, like, like)).fetchall()
+
     db.close()
     return jsonify(
         customers=[dict(r) for r in customers],
         invoices=[dict(r) for r in invoices],
         tickets=[dict(r) for r in tickets],
         documents=[dict(r) for r in documents],
+        contracts=[dict(r) for r in contracts],
     )
 
 
@@ -2877,6 +2885,351 @@ def recurring_delete(rid):
     db.close()
     flash("Vorlage gelöscht.", "success")
     return redirect(url_for("recurring_list"))
+
+
+# ── Verträge ──────────────────────────────────────────────────────────────────
+
+CONTRACT_PLACEHOLDERS = [
+    ("{{kunde_name}}", "Name des Ansprechpartners"),
+    ("{{kunde_firma}}", "Firma des Kunden"),
+    ("{{kunde_strasse}}", "Straße & Hausnummer"),
+    ("{{kunde_plz}}", "Postleitzahl"),
+    ("{{kunde_ort}}", "Ort"),
+    ("{{kunde_email}}", "E-Mail des Kunden"),
+    ("{{kunde_telefon}}", "Telefon des Kunden"),
+    ("{{firma_name}}", "Eigener Firmenname"),
+    ("{{firma_strasse}}", "Eigene Straße & Hausnummer"),
+    ("{{firma_plz_ort}}", "Eigene PLZ & Ort"),
+    ("{{firma_email}}", "Eigene E-Mail"),
+    ("{{firma_telefon}}", "Eigenes Telefon"),
+    ("{{vertragsnummer}}", "Fortlaufende Vertragsnummer"),
+    ("{{datum}}", "Heutiges Datum"),
+]
+
+
+def next_contract_number():
+    db = get_db()
+    row = db.execute("SELECT number FROM contracts ORDER BY id DESC LIMIT 1").fetchone()
+    db.close()
+    if not row:
+        return f"V-{date.today().year}-001"
+    try:
+        num = int(row["number"].split("-")[-1]) + 1
+        return f"V-{date.today().year}-{num:03d}"
+    except Exception:
+        return f"V-{date.today().year}-001"
+
+
+def render_contract_body(body, customer, cfg, number):
+    values = {
+        "{{kunde_name}}": customer.get("name") or "",
+        "{{kunde_firma}}": customer.get("company") or "",
+        "{{kunde_strasse}}": customer.get("street") or "",
+        "{{kunde_plz}}": customer.get("zip") or "",
+        "{{kunde_ort}}": customer.get("city") or "",
+        "{{kunde_email}}": customer.get("email") or "",
+        "{{kunde_telefon}}": customer.get("phone") or "",
+        "{{firma_name}}": cfg.get("company_name", "") or "",
+        "{{firma_strasse}}": cfg.get("company_street", "") or "",
+        "{{firma_plz_ort}}": f"{cfg.get('company_zip','')} {cfg.get('company_city','')}".strip(),
+        "{{firma_email}}": cfg.get("company_email", "") or "",
+        "{{firma_telefon}}": cfg.get("company_phone", "") or "",
+        "{{vertragsnummer}}": number,
+        "{{datum}}": date.today().strftime("%d.%m.%Y"),
+    }
+    for token, val in values.items():
+        body = body.replace(token, val)
+    return body
+
+
+@app.route("/contracts")
+@login_required
+def contracts_list():
+    db = get_db()
+    contracts = db.execute("""
+        SELECT c.*, cu.name as customer_name, cu.company as customer_company
+        FROM contracts c JOIN customers cu ON cu.id = c.customer_id
+        ORDER BY c.created_at DESC
+    """).fetchall()
+    templates = db.execute("SELECT * FROM contract_templates ORDER BY name").fetchall()
+    customers_for_filter = db.execute("""
+        SELECT DISTINCT cu.id, cu.name, cu.company FROM customers cu
+        JOIN contracts c ON c.customer_id = cu.id ORDER BY cu.name
+    """).fetchall()
+    db.close()
+    return render_template("contracts.html", contracts=contracts, templates=templates,
+                           customers_for_filter=customers_for_filter)
+
+
+@app.route("/contracts/templates/new", methods=["GET", "POST"])
+@login_required
+def contract_template_new():
+    if request.method == "POST":
+        db = get_db()
+        db.execute("INSERT INTO contract_templates (name, category, body) VALUES (%s,%s,%s)",
+                   (request.form.get("name", "").strip(), request.form.get("category", "Sonstiges"),
+                    request.form.get("body", "")))
+        db.commit()
+        db.close()
+        flash("Vertragsvorlage erstellt", "success")
+        return redirect(url_for("contracts_list") + "#vorlagen")
+    return render_template("contract_template_form.html", template=None, placeholders=CONTRACT_PLACEHOLDERS)
+
+
+@app.route("/contracts/templates/<int:tid>/edit", methods=["GET", "POST"])
+@login_required
+def contract_template_edit(tid):
+    db = get_db()
+    tpl = db.execute("SELECT * FROM contract_templates WHERE id=%s", (tid,)).fetchone()
+    if not tpl:
+        db.close()
+        abort(404)
+    if request.method == "POST":
+        db.execute("UPDATE contract_templates SET name=%s, category=%s, body=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                   (request.form.get("name", "").strip(), request.form.get("category", "Sonstiges"),
+                    request.form.get("body", ""), tid))
+        db.commit()
+        db.close()
+        flash("Vertragsvorlage gespeichert", "success")
+        return redirect(url_for("contracts_list") + "#vorlagen")
+    db.close()
+    return render_template("contract_template_form.html", template=tpl, placeholders=CONTRACT_PLACEHOLDERS)
+
+
+@app.route("/contracts/templates/<int:tid>/delete", methods=["POST"])
+@login_required
+def contract_template_delete(tid):
+    db = get_db()
+    db.execute("DELETE FROM contract_templates WHERE id=%s", (tid,))
+    db.commit()
+    db.close()
+    flash("Vertragsvorlage gelöscht", "success")
+    return redirect(url_for("contracts_list") + "#vorlagen")
+
+
+@app.route("/api/contract-preview")
+@login_required
+def api_contract_preview():
+    template_id = request.args.get("template_id")
+    customer_id = request.args.get("customer_id")
+    db = get_db()
+    tpl = db.execute("SELECT * FROM contract_templates WHERE id=%s", (template_id,)).fetchone() if template_id else None
+    customer = db.execute("SELECT * FROM customers WHERE id=%s", (customer_id,)).fetchone() if customer_id else None
+    cfg = get_settings(db)
+    db.close()
+    if not tpl:
+        return jsonify(body="", title="")
+    body = tpl["body"]
+    if customer:
+        body = render_contract_body(body, dict(customer), cfg, next_contract_number())
+    return jsonify(body=body, title=tpl["name"])
+
+
+@app.route("/contracts/new", methods=["GET", "POST"])
+@login_required
+def contract_new():
+    db = get_db()
+    if request.method == "POST":
+        number = next_contract_number()
+        contract_id = db.execute(
+            "INSERT INTO contracts (number, template_id, customer_id, title, body, status, created_by) "
+            "VALUES (%s,%s,%s,%s,%s,'draft',%s) RETURNING id",
+            (number, request.form.get("template_id") or None, request.form["customer_id"],
+             request.form.get("title", "").strip() or number, request.form.get("body", ""),
+             session["username"])
+        ).fetchone()["id"]
+        log_activity(db, "erstellt", "Vertrag", contract_id, number)
+        db.commit()
+        db.close()
+        flash(f"Vertrag {number} erstellt", "success")
+        return redirect(url_for("contract_view", cid=contract_id))
+    customers = db.execute("SELECT * FROM customers ORDER BY name").fetchall()
+    templates = db.execute("SELECT * FROM contract_templates ORDER BY name").fetchall()
+    db.close()
+    return render_template("contract_form.html", customers=customers, templates=templates,
+                           number=next_contract_number())
+
+
+@app.route("/contracts/<int:cid>")
+@login_required
+def contract_view(cid):
+    db = get_db()
+    contract = db.execute("""
+        SELECT c.*, cu.name as customer_name, cu.company as customer_company, cu.email as customer_email
+        FROM contracts c JOIN customers cu ON cu.id = c.customer_id WHERE c.id=%s
+    """, (cid,)).fetchone()
+    if not contract:
+        db.close()
+        flash("Vertrag nicht gefunden", "error")
+        return redirect(url_for("contracts_list"))
+    email_log = db.execute("SELECT * FROM contract_emails WHERE contract_id=%s ORDER BY sent_at DESC", (cid,)).fetchall()
+    cfg = get_settings(db)
+    db.close()
+    return render_template("contract_view.html", contract=contract, email_log=email_log, cfg=cfg)
+
+
+def generate_contract_pdf_bytes(cid, db):
+    from io import BytesIO
+    from xhtml2pdf import pisa
+    contract = db.execute("""
+        SELECT c.*, cu.name as customer_name, cu.company as customer_company
+        FROM contracts c JOIN customers cu ON cu.id = c.customer_id WHERE c.id=%s
+    """, (cid,)).fetchone()
+    cfg = get_settings(db)
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    html_str = render_template("contract_pdf.html", contract=contract, cfg=cfg, doc_store=data_dir)
+    buf = BytesIO()
+    pisa.CreatePDF(html_str.encode("utf-8"), dest=buf)
+    return buf.getvalue()
+
+
+@app.route("/contracts/<int:cid>/pdf")
+@login_required
+def contract_pdf(cid):
+    db = get_db()
+    contract = db.execute("SELECT number FROM contracts WHERE id=%s", (cid,)).fetchone()
+    if not contract:
+        db.close()
+        abort(404)
+    try:
+        pdf = generate_contract_pdf_bytes(cid, db)
+    finally:
+        db.close()
+    from flask import Response
+    disposition = "inline" if request.args.get("inline") else "attachment"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'{disposition}; filename="Vertrag_{contract["number"]}.pdf"'})
+
+
+@app.route("/contracts/<int:cid>/send-email", methods=["POST"])
+@login_required
+def contract_send_email(cid):
+    db = get_db()
+    contract = db.execute("""
+        SELECT c.*, cu.name as customer_name, cu.email as customer_email
+        FROM contracts c JOIN customers cu ON cu.id = c.customer_id WHERE c.id=%s
+    """, (cid,)).fetchone()
+    to_addr = request.form.get("to_email", "").strip() or (contract["customer_email"] if contract else "")
+    subject = request.form.get("subject", f"Vertrag {contract['number']}").strip()
+    body    = request.form.get("body", "").strip()
+    if not to_addr:
+        flash("Keine E-Mail-Adresse angegeben", "error")
+        db.close()
+        return redirect(url_for("contract_view", cid=cid))
+    try:
+        cfg = get_settings(db)
+        pdf_bytes = generate_contract_pdf_bytes(cid, db)
+        host       = cfg.get("smtp_host", "").strip()
+        port       = int(cfg.get("smtp_port", 587) or 587)
+        user       = cfg.get("smtp_user", "").strip()
+        pw         = cfg.get("smtp_pass", "")
+        from_name  = cfg.get("smtp_from_name", "tkToolkit").strip() or "tkToolkit"
+        from_email = (cfg.get("smtp_from_email", "") or user).strip()
+        if not host:
+            raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
+        msg = MIMEMultipart()
+        msg["From"]    = f"{from_name} <{from_email}>"
+        msg["To"]      = to_addr
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        pdf_part = MIMEBase("application", "pdf")
+        pdf_part.set_payload(pdf_bytes)
+        email_encoders.encode_base64(pdf_part)
+        pdf_part.add_header("Content-Disposition", f'attachment; filename="Vertrag_{contract["number"]}.pdf"')
+        msg.attach(pdf_part)
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=20) as s:
+                s.login(user, pw)
+                s.sendmail(from_email, to_addr, msg.as_string())
+        else:
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.ehlo(); s.starttls(); s.ehlo()
+                s.login(user, pw)
+                s.sendmail(from_email, to_addr, msg.as_string())
+        db.execute("INSERT INTO contract_emails (contract_id, to_addr, subject, sent_by) VALUES (%s,%s,%s,%s)",
+                   (cid, to_addr, subject, session["username"]))
+        if contract["status"] == "draft":
+            db.execute("UPDATE contracts SET status='sent' WHERE id=%s", (cid,))
+        log_activity(db, "per E-Mail gesendet", "Vertrag", cid, contract["number"], f"an {to_addr}")
+        db.commit()
+        flash(f"Vertrag als PDF an {to_addr} gesendet ✓", "success")
+    except Exception as e:
+        flash(f"E-Mail-Fehler: {e}", "error")
+    db.close()
+    return redirect(url_for("contract_view", cid=cid))
+
+
+@app.route("/contracts/<int:cid>/status/<status>", methods=["POST"])
+@login_required
+def contract_status(cid, status):
+    db = get_db()
+    contract = db.execute("SELECT status, number FROM contracts WHERE id=%s", (cid,)).fetchone()
+    if not contract:
+        db.close()
+        abort(404)
+    if contract["status"] in ("signed",) and status == "draft":
+        flash("Bereits unterschriebene Verträge können nicht mehr auf Entwurf zurückgesetzt werden.", "error")
+        db.close()
+        return redirect(url_for("contract_view", cid=cid))
+    db.execute("UPDATE contracts SET status=%s WHERE id=%s", (status, cid))
+    log_activity(db, "Status geändert", "Vertrag", cid, contract["number"], f"neuer Status: {status}")
+    db.commit()
+    db.close()
+    return redirect(url_for("contract_view", cid=cid))
+
+
+@app.route("/contracts/<int:cid>/sign", methods=["POST"])
+@login_required
+def contract_sign(cid):
+    signer = request.form.get("signed_by_name", "").strip()
+    if not signer:
+        flash("Bitte den Namen des Unterzeichners angeben.", "error")
+        return redirect(url_for("contract_view", cid=cid))
+    db = get_db()
+    contract = db.execute("SELECT number FROM contracts WHERE id=%s", (cid,)).fetchone()
+    db.execute("UPDATE contracts SET status='signed', signed_at=%s, signed_by_name=%s WHERE id=%s",
+               (date.today().isoformat(), signer, cid))
+    log_activity(db, "unterschrieben markiert", "Vertrag", cid, contract["number"] if contract else None, f"von {signer}")
+    db.commit()
+    db.close()
+    flash("Vertrag als unterschrieben markiert", "success")
+    return redirect(url_for("contract_view", cid=cid))
+
+
+@app.route("/contracts/<int:cid>/cancel", methods=["POST"])
+@admin_required
+def contract_cancel(cid):
+    db = get_db()
+    contract = db.execute("SELECT status, number FROM contracts WHERE id=%s", (cid,)).fetchone()
+    if not contract:
+        db.close()
+        abort(404)
+    db.execute("UPDATE contracts SET status='cancelled' WHERE id=%s", (cid,))
+    log_activity(db, "storniert", "Vertrag", cid, contract["number"])
+    db.commit()
+    db.close()
+    flash("Vertrag storniert.", "success")
+    return redirect(url_for("contract_view", cid=cid))
+
+
+@app.route("/contracts/<int:cid>/delete", methods=["POST"])
+@login_required
+def contract_delete(cid):
+    db = get_db()
+    contract = db.execute("SELECT status, number FROM contracts WHERE id=%s", (cid,)).fetchone()
+    if not contract:
+        db.close()
+        abort(404)
+    if contract["status"] in ("sent", "signed"):
+        db.close()
+        flash(f"Vertrag {contract['number']} wurde bereits versendet/unterschrieben und kann nicht gelöscht werden. Nutze stattdessen 'Stornieren'.", "error")
+        return redirect(url_for("contracts_list"))
+    db.execute("DELETE FROM contracts WHERE id=%s", (cid,))
+    log_activity(db, "gelöscht", "Vertrag", cid, contract["number"])
+    db.commit()
+    db.close()
+    flash("Vertrag gelöscht", "success")
+    return redirect(url_for("contracts_list"))
 
 
 # ── Akquise / Lead Pipeline ───────────────────────────────────────────────────

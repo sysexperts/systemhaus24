@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 2cm 2.2cm 2.4cm 2.2cm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
+
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 0.9cm; }
+  .header-table td { vertical-align: top; padding: 0; }
+  .header-table td.right { text-align: right; }
+  .company-name { font-size: 12.5pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
+  .company-details { font-size: 8.5pt; color: #888; line-height: 1.6; }
+  .doc-title { font-size: 20pt; font-weight: bold; color: #1c3461; letter-spacing: 3pt; margin-bottom: 8pt; }
+  .doc-number { font-size: 9.5pt; color: #999; font-family: Courier, monospace; }
+
+  .status-badge { display: inline-block; font-size: 7.5pt; font-weight: bold; letter-spacing: 0.5pt;
+                  text-transform: uppercase; padding: 3pt 9pt; border-radius: 9pt; margin-top: 6pt; }
+  .status-signed { background: #dcf5e6; color: #1a7a42; }
+  .status-sent { background: #dbe7fb; color: #1c4fa6; }
+  .status-cancelled { background: #fbdcdc; color: #a61c1c; }
+  .status-draft { background: #eee; color: #888; }
+
+  .title-block { margin-bottom: 0.7cm; }
+  .contract-title { font-size: 13pt; font-weight: bold; color: #222; margin-bottom: 3pt; }
+  .contract-sub { font-size: 9pt; color: #888; }
+
+  .body-text { font-size: 9.5pt; line-height: 1.7; color: #333; white-space: pre-wrap; margin-bottom: 1cm; }
+
+  .sig-table { width: 100%; border-collapse: collapse; margin-top: 1.2cm; }
+  .sig-table td { width: 50%; padding-right: 20pt; vertical-align: top; }
+  .sig-line { border-bottom: 1px solid #999; height: 40pt; }
+  .sig-label { font-size: 8pt; color: #777; margin-top: 4pt; }
+  .sig-signed { font-size: 8pt; color: #1a7a42; margin-top: 2pt; font-weight: bold; }
+
+  .logo { max-height: 46pt; max-width: 150pt; }
+</style>
+</head>
+<body>
+
+<table class="header-table">
+  <tr>
+    <td style="width:55%">
+      {% if cfg.get('company_logo_ext') %}
+      <img src="file://{{ doc_store }}/logo.{{ cfg.get('company_logo_ext') }}" class="logo"><br>
+      {% endif %}
+      <div class="company-name">{{ cfg.get('company_name','Ihre Firma') }}</div>
+      <div class="company-details">
+        {% if cfg.get('company_street') %}{{ cfg.get('company_street') }}<br>{% endif %}
+        {% if cfg.get('company_zip') or cfg.get('company_city') %}{{ cfg.get('company_zip','') }} {{ cfg.get('company_city','') }}<br>{% endif %}
+        {% if cfg.get('company_email') %}{{ cfg.get('company_email') }}{% endif %}
+      </div>
+    </td>
+    <td class="right" style="width:45%">
+      <div class="doc-title">VERTRAG</div>
+      <div class="doc-number">{{ contract.number }}</div>
+      <div class="status-badge status-{{ contract.status }}">
+        {{ {'draft':'Entwurf','sent':'Gesendet','signed':'Unterschrieben','cancelled':'Storniert'}.get(contract.status, contract.status) }}
+      </div>
+    </td>
+  </tr>
+</table>
+
+<div class="title-block">
+  <div class="contract-title">{{ contract.title }}</div>
+  <div class="contract-sub">Vertragspartner: {{ contract.customer_company or contract.customer_name }}</div>
+</div>
+
+<div class="body-text">{{ contract.body }}</div>
+
+<table class="sig-table">
+  <tr>
+    <td>
+      <div class="sig-line"></div>
+      <div class="sig-label">Ort, Datum, Unterschrift — {{ cfg.get('company_name','') }}</div>
+    </td>
+    <td>
+      <div class="sig-line"></div>
+      <div class="sig-label">Ort, Datum, Unterschrift — {{ contract.customer_company or contract.customer_name }}</div>
+      {% if contract.status == 'signed' %}
+      <div class="sig-signed">Digital erfasst: {{ contract.signed_by_name }} am {{ contract.signed_at | fmtdate }}</div>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

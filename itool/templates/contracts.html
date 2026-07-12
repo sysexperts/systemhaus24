@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Verträge – tkToolkit{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Verträge</h1>
+  <div class="flex gap-2">
+    <button onclick="switchTab('vorlagen')" id="tab-vorlagen-btn"
+            class="tab-toggle-btn px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-700 bg-white border border-gray-200 transition-colors">
+      Vorlagen
+    </button>
+    <a href="{{ url_for('contract_new') }}"
+       class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      + Neuer Vertrag
+    </a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- ══════════════ PANE: Verträge ══════════════ -->
+<div id="pane-vertraege">
+
+  <!-- Kundenfilter -->
+  <form method="GET" class="flex items-center gap-2 mb-4">
+    <select name="customer_id" onchange="this.form.submit()"
+            class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">Alle Kunden</option>
+      {% for c in customers_for_filter %}
+      <option value="{{ c.id }}" {% if request.args.get('customer_id') == c.id|string %}selected{% endif %}>{{ c.company or c.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% set filter_cid = request.args.get('customer_id', '') %}
+  {% set visible_contracts = contracts if not filter_cid else contracts|selectattr('customer_id', 'equalto', filter_cid|int)|list %}
+
+  {% if visible_contracts %}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Nummer</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Titel</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Kunde</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Erstellt</th>
+          <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
+          <th class="px-5 py-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in visible_contracts %}
+      <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+        <td class="px-5 py-3 font-mono text-xs text-gray-600 font-medium">{{ c.number }}</td>
+        <td class="px-5 py-3 text-gray-700">{{ c.title }}</td>
+        <td class="px-5 py-3">
+          <div class="font-medium text-gray-800">{{ c.customer_company or c.customer_name }}</div>
+        </td>
+        <td class="px-5 py-3 text-gray-400 text-xs">{{ c.created_at | fmtdt }}</td>
+        <td class="px-5 py-3">
+          <span class="px-2.5 py-1 rounded-full text-xs font-medium
+            {% if c.status=='signed' %}bg-green-100 text-green-700
+            {% elif c.status=='sent' %}bg-blue-100 text-blue-700
+            {% elif c.status=='cancelled' %}bg-red-100 text-red-600
+            {% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ {'draft':'Entwurf','sent':'Gesendet','signed':'Unterschrieben','cancelled':'Storniert'}.get(c.status, c.status) }}
+          </span>
+        </td>
+        <td class="px-5 py-3 text-right">
+          <div class="flex items-center justify-end gap-3">
+            <a href="{{ url_for('contract_view', cid=c.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Ansehen</a>
+            {% if c.status == 'draft' %}
+            <form method="POST" action="{{ url_for('contract_delete', cid=c.id) }}" onsubmit="return confirm('Vertrag löschen?')">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+    <div class="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+    </div>
+    <p class="text-gray-600 font-medium mb-1">Noch keine Verträge</p>
+    <p class="text-sm text-gray-400 mb-5">Lege zuerst eine Vorlage an, dann kannst du daraus Verträge erstellen.</p>
+    <a href="{{ url_for('contract_new') }}" class="bg-[#1c3461] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Ersten Vertrag erstellen
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══════════════ PANE: Vorlagen ══════════════ -->
+<div id="pane-vorlagen" class="hidden">
+  <div class="flex justify-end mb-4">
+    <a href="{{ url_for('contract_template_new') }}"
+       class="flex items-center gap-2 bg-[#1c3461] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#2a4a8a] transition-colors font-medium">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Neue Vorlage
+    </a>
+  </div>
+
+  {% if templates %}
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    {% for t in templates %}
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <p class="font-semibold text-gray-800">{{ t.name }}</p>
+          <span class="text-xs text-gray-400">{{ t.category }}</span>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 line-clamp-3 mb-4" style="display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">
+        {{ t.body[:180] }}{% if t.body|length > 180 %}…{% endif %}
+      </p>
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('contract_template_edit', tid=t.id) }}" class="text-xs text-[#1c3461] hover:underline font-medium">Bearbeiten</a>
+        <a href="{{ url_for('contract_new') }}?template_id={{ t.id }}" class="text-xs text-emerald-600 hover:underline font-medium">Vertrag erstellen</a>
+        <form method="POST" action="{{ url_for('contract_template_delete', tid=t.id) }}" onsubmit="return confirm('Vorlage löschen?')" class="ml-auto">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="text-xs text-red-400 hover:text-red-600 font-medium">Löschen</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+    <p class="text-gray-600 font-medium mb-1">Noch keine Vorlagen</p>
+    <p class="text-sm text-gray-400 mb-5">Erstelle eine Vorlage mit Platzhaltern wie {{ '{{kunde_name}}' }}, aus der du später Verträge generieren kannst.</p>
+    <a href="{{ url_for('contract_template_new') }}" class="bg-[#1c3461] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Erste Vorlage erstellen
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function switchTab(id) {
+  const panes = ['vertraege', 'vorlagen'];
+  panes.forEach(p => document.getElementById('pane-' + p).classList.toggle('hidden', p !== id));
+  const btn = document.getElementById('tab-vorlagen-btn');
+  if (id === 'vorlagen') {
+    btn.classList.add('bg-[#1c3461]', 'text-white', 'border-[#1c3461]');
+    btn.classList.remove('bg-white', 'text-gray-500', 'border-gray-200');
+    btn.textContent = 'Verträge';
+    btn.setAttribute('onclick', "switchTab('vertraege')");
+  } else {
+    btn.classList.remove('bg-[#1c3461]', 'text-white', 'border-[#1c3461]');
+    btn.classList.add('bg-white', 'text-gray-500', 'border-gray-200');
+    btn.textContent = 'Vorlagen';
+    btn.setAttribute('onclick', "switchTab('vorlagen')");
+  }
+  history.replaceState(null, '', '#' + id);
+}
+if (location.hash.replace('#','') === 'vorlagen') switchTab('vorlagen');
+</script>
+{% endblock %}

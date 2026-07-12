@@ -142,6 +142,14 @@
       </div>
     </div>
 
+    <!-- Verträge -->
+    <a href="{{ url_for('contracts_list') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if 'contract' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
+      <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <span class="lbl text-sm text-white font-medium">Verträge</span>
+    </a>
+
     <!-- Tickets -->
     <div class="mx-2 mb-1">
       <button onclick="toggleMenu('menu-tick', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'ticket' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -607,6 +615,14 @@ function renderSearchResults(data) {
       d.parent_id ? ('/documents/' + d.parent_id) : '/documents',
       d.name, '',
       `<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>`
+    ))));
+  }
+  if (data.contracts && data.contracts.length) {
+    sections.push(searchSection('Verträge', data.contracts.map(v => searchItem(
+      '/contracts/' + v.id,
+      v.title || v.number,
+      v.customer_company || v.customer_name || '',
+      `<svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>`
     ))));
   }
 

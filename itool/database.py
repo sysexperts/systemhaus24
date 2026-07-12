@@ -295,6 +295,35 @@ def init_db():
             active INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS contract_templates (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT DEFAULT 'Sonstiges',
+            body TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS contracts (
+            id SERIAL PRIMARY KEY,
+            number TEXT UNIQUE NOT NULL,
+            template_id INTEGER REFERENCES contract_templates(id) ON DELETE SET NULL,
+            customer_id INTEGER NOT NULL REFERENCES customers(id),
+            title TEXT NOT NULL,
+            body TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'draft',
+            signed_at TEXT,
+            signed_by_name TEXT,
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS contract_emails (
+            id SERIAL PRIMARY KEY,
+            contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+            to_addr TEXT NOT NULL,
+            subject TEXT,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_by TEXT
+        )""",
         """CREATE TABLE IF NOT EXISTS promoter_tokens (
             id SERIAL PRIMARY KEY,
             token TEXT UNIQUE NOT NULL,
