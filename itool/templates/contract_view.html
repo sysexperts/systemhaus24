@@ -30,11 +30,11 @@
   </form>
   {% endif %}
 
-  <button onclick="window.print()"
+  <a href="{{ url_for('contract_pdf', cid=contract.id) }}"
           class="px-4 py-2 rounded-xl text-sm bg-gray-700 text-white hover:bg-gray-800 transition-colors flex items-center gap-2">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-    Drucken / PDF
-  </button>
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
+    PDF herunterladen
+  </a>
   <button onclick="document.getElementById('email-modal').classList.remove('hidden')"
           class="px-4 py-2 rounded-xl text-sm bg-[#1c3461] text-white hover:bg-[#2a4a8a] transition-colors flex items-center gap-2">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
