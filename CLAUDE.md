@@ -32,6 +32,21 @@ DB-Zugangsdaten liegen in der (gitignored) `.env` auf dem Server, nicht im `dock
 hardcoden. Volume heißt `itool_dbdata` – beim Anfassen von `docker-compose.yml` sicherstellen, dass
 kein Volume-Rename passiert (sonst Datenverlust).
 
+## Backups
+
+- Skript: `/opt/systemhaus24/backup-db.sh` auf dem Server, läuft täglich um 3:30 Uhr per Cron
+  (`crontab -l` als root).
+- Sichert DB-Dump (`pg_dump` aus `itool-db-1`) und den `itool/data`-Ordner (Dokumente/Uploads).
+- Struktur lokal **und** auf Google Drive identisch: `backups/YYYY-MM-DD/db_<timestamp>.sql.gz`
+  und `backups/YYYY-MM-DD/data_<timestamp>.tar.gz`.
+- Lokal unter `/opt/systemhaus24/backups/`, extern via `rclone` auf Google Drive im Ordner
+  `gdrive:itool-backups/`.
+- **Kein automatisches Lösch-/Retention-Limit** – der Nutzer räumt manuell auf. Beim Anfassen des
+  Skripts diese bewusste Entscheidung nicht wieder durch eine automatische Aufräumroutine ersetzen,
+  ohne vorher zu fragen.
+- rclone-Config mit Google-Drive-Token liegt in `/root/.config/rclone/rclone.conf` auf dem Server
+  (nicht im Git-Repo, nicht anfassen ohne Grund).
+
 ## Feste Konventionen
 
 - **GoBD-Prinzip**: Rechnungen und Verträge, die bereits versendet/unterschrieben sind, werden
