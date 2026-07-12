@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+{% set accent = cfg.get('accent_color','#1c3461') %}
 <style>
   @page { size: A4; margin: 2.2cm 2.5cm 2.6cm 2.5cm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -10,9 +11,9 @@
   .header-table { width: 100%; border-collapse: collapse; margin-bottom: 0.8cm; }
   .header-table td { vertical-align: top; padding: 0; font-family: Helvetica, Arial, sans-serif; }
   .header-table td.right { text-align: right; }
-  .company-name { font-size: 12pt; font-weight: bold; color: #1c3461; margin-bottom: 3pt; }
+  .company-name { font-size: 12pt; font-weight: bold; color: {{ accent }}; margin-bottom: 3pt; }
   .company-details { font-size: 8pt; color: #888; line-height: 1.55; }
-  .doc-title { font-size: 18pt; font-weight: bold; color: #1c3461; letter-spacing: 3.5pt; margin-bottom: 6pt; }
+  .doc-title { font-size: 18pt; font-weight: bold; color: {{ accent }}; letter-spacing: 3.5pt; margin-bottom: 6pt; }
   .doc-number { font-size: 9pt; color: #999; font-family: Courier, monospace; }
 
   .status-badge { display: inline-block; font-size: 7pt; font-weight: bold; letter-spacing: 0.5pt;
@@ -23,7 +24,7 @@
   .status-cancelled { background: #fbdcdc; color: #a61c1c; }
   .status-draft { background: #eee; color: #888; }
 
-  .divider { border: none; border-top: 1.5pt solid #1c3461; margin-bottom: 0.6cm; }
+  .divider { border: none; border-top: 1.5pt solid {{ accent }}; margin-bottom: 0.6cm; }
 
   .title-block { margin-bottom: 0.5cm; font-family: Helvetica, Arial, sans-serif; }
   .contract-title { font-size: 14pt; font-weight: bold; color: #1a1a1a; margin-bottom: 2pt; }
@@ -111,7 +112,7 @@
 <div class="body-text">
   {% for para in contract.body.split('\n\n') %}
   {% if para.strip() %}
-  <p>{{ para.strip() | e | replace('\n', '<br>') | safe }}</p>
+  <p>{% for line in para.strip().split('\n') %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
   {% endif %}
   {% endfor %}
 </div>

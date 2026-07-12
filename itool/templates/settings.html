@@ -4,11 +4,6 @@
 
 <h1 class="text-lg font-semibold text-gray-600 mb-5">Einstellungen</h1>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
-  {% endfor %}
-{% endwith %}
 
 <!-- Tabs -->
 <div class="flex gap-1 mb-5 bg-white/60 rounded-2xl p-1.5 w-fit shadow-sm border border-white">

@@ -2,11 +2,6 @@
 {% block title %}Vertrag {{ contract.number }} – tkToolkit{% endblock %}
 {% block content %}
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-  <div class="mb-4 px-4 py-3 rounded-xl text-sm {% if cat=='success' %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">{{ msg }}</div>
-  {% endfor %}
-{% endwith %}
 
 <!-- Action bar (hidden on print) -->
 <div class="flex items-center gap-2 mb-5 no-print flex-wrap">
@@ -99,7 +94,7 @@
   <div class="text-sm text-gray-700 leading-relaxed mb-10 space-y-3" style="text-align: justify;">
     {% for para in contract.body.split('\n\n') %}
       {% if para.strip() %}
-      <p>{{ para.strip() | e | replace('\n', '<br>') | safe }}</p>
+      <p>{% for line in para.strip().split('\n') %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
       {% endif %}
     {% endfor %}
   </div>
