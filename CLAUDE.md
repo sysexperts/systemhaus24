@@ -1,7 +1,12 @@
 # Systemhaus24 – itool
 
 Internes CRM/ERP-Tool ("itool") für Systemhaus24, ein IT-Dienstleister. Flask + PostgreSQL + Docker,
-live unter https://tools.systemhaus24.net. Alle UI-Texte sind auf Deutsch.
+live unter https://tool.vasys-it.de (aktiver Server, seit 2026-07-17). Alle UI-Texte sind auf Deutsch.
+
+> Server-Migration: Bis 2026-07-17 lief das Tool auf `31.70.108.144` (https://tools.systemhaus24.net).
+> Seither ist der aktive Server **`185.248.140.225`** (Domain `tool.vasys-it.de`). Der alte Server läuft
+> noch, ist aber nicht mehr das Deploy-Ziel. Die RustDesk-Fernwartung (hbbs/hbbr) bleibt auf dem alten
+> Server (`rustdesk.systemhaus24.net`) – der "Aufschalten"-Button/Online-Status zeigt weiterhin dorthin.
 
 ## Projektstruktur
 
@@ -15,7 +20,7 @@ live unter https://tools.systemhaus24.net. Alle UI-Texte sind auf Deutsch.
 
 1. Lokal in `itool/` ändern.
 2. `git add`, `git commit`, `git push origin master`.
-3. Per SSH auf den Server (`root@31.70.108.144`, PuTTY `plink`/`pscp`):
+3. Per SSH auf den Server (`root@185.248.140.225`, PuTTY `plink`/`pscp`):
    ```
    cd /opt/systemhaus24 && git pull origin master && cd itool && docker compose up -d --build
    ```
@@ -46,6 +51,9 @@ kein Volume-Rename passiert (sonst Datenverlust).
   ohne vorher zu fragen.
 - rclone-Config mit Google-Drive-Token liegt in `/root/.config/rclone/rclone.conf` auf dem Server
   (nicht im Git-Repo, nicht anfassen ohne Grund).
+- **Neuer Server (185.248.140.225):** Lokales tägliches Backup per Cron (3:30 Uhr) ist eingerichtet.
+  Der Google-Drive-Offsite-Upload ist hier **noch nicht** konfiguriert (kein rclone-Remote `gdrive:`) –
+  das Skript überspringt den Upload dann sauber. Muss bei Bedarf separat mit `rclone config` eingerichtet werden.
 
 ## Feste Konventionen
 
