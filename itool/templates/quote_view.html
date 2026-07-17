@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_flow_steps.html" import flow_steps %}
 {% block title %}Angebot {{ quote.number }}{% endblock %}
 {% block content %}
 
@@ -27,6 +28,8 @@
        class="px-4 py-2 rounded-xl text-sm text-gray-600 bg-white/80 border border-gray-200 hover:bg-gray-50 transition-colors">Herunterladen</a>
   </div>
 </div>
+
+{{ flow_steps(quote, linked_invoice) }}
 
 <div class="grid grid-cols-3 gap-5">
 

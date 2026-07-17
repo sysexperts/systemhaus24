@@ -11,14 +11,22 @@
 </div>
 
 <!-- Status filter -->
-<div class="flex gap-2 mb-4">
-  {% for val, label in [('','Alle'),('open','Offen'),('in_progress','In Arbeit'),('closed','Gelöst')] %}
-  <a href="{{ url_for('tickets', status=val) }}"
-     class="px-4 py-1.5 rounded-xl text-sm font-medium transition-colors
-       {% if status==val %}bg-[#1c3461] text-white shadow-sm{% else %}bg-white/70 text-gray-500 hover:bg-white/90{% endif %}">
-    {{ label }}
-  </a>
-  {% endfor %}
+<div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+  <div class="flex gap-2">
+    {% for val, label in [('','Alle'),('open','Offen'),('in_progress','In Arbeit'),('closed','Gelöst')] %}
+    <a href="{{ url_for('tickets', status=val, q=q) }}"
+       class="px-4 py-1.5 rounded-xl text-sm font-medium transition-colors
+         {% if status==val %}bg-[#1c3461] text-white shadow-sm{% else %}bg-white/70 text-gray-500 hover:bg-white/90{% endif %}">
+      {{ label }}
+    </a>
+    {% endfor %}
+  </div>
+  <form method="GET" class="flex gap-2">
+    <input type="hidden" name="status" value="{{ status }}">
+    <input name="q" value="{{ q }}" placeholder="Suche: Titel, Kunde oder Ticket-Nr. (#42)"
+           class="bg-white/70 border border-gray-200 rounded-xl px-3 py-1.5 text-sm w-72 max-w-full focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
+    <button type="submit" class="bg-[#1c3461] text-white px-4 py-1.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Suchen</button>
+  </form>
 </div>
 
 <div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
@@ -43,6 +51,7 @@
           {% else %}
           <span class="w-2 h-2 shrink-0"></span>
           {% endif %}
+          <span class="text-[11px] font-mono text-gray-400 shrink-0">#{{ t.id }}</span>
           <a href="{{ url_for('ticket_detail', tid=t.id) }}"
              class="hover:underline {% if not t.is_read %}font-bold text-gray-900{% else %}font-normal text-gray-600{% endif %}">{{ t.title }}</a>
         </div>

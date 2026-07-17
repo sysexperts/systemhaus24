@@ -159,24 +159,40 @@
 
       <!-- Add comment -->
       <div class="border-t border-gray-100 pt-4">
-        <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-3">Update schreiben</p>
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold">Update schreiben</p>
+          <select onchange="insertTemplate(this, 'comment_body', null)"
+                  class="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400">
+            <option value="">📋 Vorlage einfügen…</option>
+          </select>
+        </div>
         <form method="POST" action="{{ url_for('ticket_update_post', tid=ticket.id) }}" class="space-y-3">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="update_type" value="comment">
-          <textarea name="body" rows="3" placeholder="Update, Lösung, interne Notiz..."
+          <textarea name="body" id="comment_body" rows="3" placeholder="Update, Lösung, interne Notiz..."
                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
           <!-- Zeit erfassen -->
-          <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2 border border-gray-200">
+          <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2 border border-gray-200 flex-wrap">
             <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <span class="text-xs text-gray-400">Zeit aufgewendet:</span>
-            <input name="time_h" type="number" min="0" max="99" placeholder="0"
+            <input name="time_h" id="time_h" type="number" min="0" max="99" placeholder="0"
                    class="w-14 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400">
             <span class="text-xs text-gray-400">h</span>
-            <input name="time_m" type="number" min="0" max="59" placeholder="0"
+            <input name="time_m" id="time_m" type="number" min="0" max="59" placeholder="0"
                    class="w-14 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-400">
             <span class="text-xs text-gray-400">min</span>
+
+            <!-- Live-Timer -->
+            <div class="flex items-center gap-2 ml-auto">
+              <span id="timerDisplay" class="text-sm font-mono font-semibold text-gray-500 tabular-nums">00:00:00</span>
+              <button type="button" id="timerBtn" onclick="toggleTimer()"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="timerBtnLabel">Timer starten</span>
+              </button>
+            </div>
           </div>
           <div class="flex gap-2">
             <button type="submit" class="bg-[#1c3461] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
@@ -204,6 +220,12 @@
         </svg>
         E-Mail senden
       </p>
+      <div class="mb-3">
+        <select onchange="insertTemplate(this, 'email_body', 'email_subject')"
+                class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400">
+          <option value="">📋 Vorlage einfügen…</option>
+        </select>
+      </div>
       <form method="POST" action="{{ url_for('ticket_send_email', tid=ticket.id) }}" class="space-y-3">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div>
@@ -213,12 +235,12 @@
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Betreff</label>
-          <input name="subject" value="Ticket #{{ ticket.id }}: {{ ticket.title }}"
+          <input name="subject" id="email_subject" value="Ticket #{{ ticket.id }}: {{ ticket.title }}"
                  class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">Nachricht</label>
-          <textarea name="body" rows="5" placeholder="Guten Tag,&#10;&#10;bezüglich Ihres Anliegens..."
+          <textarea name="body" id="email_body" rows="5" placeholder="Guten Tag,&#10;&#10;bezüglich Ihres Anliegens..."
                     class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
         </div>
         <button type="submit"
@@ -251,4 +273,111 @@
 
   </div>
 </div>
+
+<script>
+let _tplCache = null;
+async function loadTemplatesInto() {
+  try {
+    const res = await fetch(`/api/templates?ticket_id={{ ticket.id }}`);
+    _tplCache = await res.json();
+    document.querySelectorAll('select[onchange^="insertTemplate"]').forEach(sel => {
+      const wantEmail = sel.getAttribute('onchange').includes("'email_subject'");
+      _tplCache.forEach(t => {
+        // Show ticket templates in ticket dropdown, email templates in email dropdown; show all if none match
+        if ((wantEmail && t.category === 'email') || (!wantEmail && t.category === 'ticket')) {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.name;
+          sel.appendChild(opt);
+        }
+      });
+    });
+  } catch(_) {}
+}
+function insertTemplate(sel, bodyId, subjectId) {
+  const t = (_tplCache || []).find(x => String(x.id) === sel.value);
+  sel.value = '';
+  if (!t) return;
+  const bodyEl = document.getElementById(bodyId);
+  if (bodyEl) bodyEl.value = t.body;
+  if (subjectId && t.subject) {
+    const subjEl = document.getElementById(subjectId);
+    if (subjEl) subjEl.value = t.subject;
+  }
+}
+loadTemplatesInto();
+
+// ── Ticket-Timer ──────────────────────────────────────────────
+const TIMER_TID = {{ ticket.id }};
+let _timerRunning = false;
+let _timerStartEpoch = null;   // client epoch (ms) minus already-elapsed
+let _timerInterval = null;
+
+function fmtHMS(totalSec) {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = Math.floor(totalSec % 60);
+  return [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
+}
+function tickTimer() {
+  const elapsed = Math.floor((Date.now() - _timerStartEpoch) / 1000);
+  document.getElementById('timerDisplay').textContent = fmtHMS(elapsed);
+}
+function setTimerUi(running) {
+  _timerRunning = running;
+  const btn = document.getElementById('timerBtn');
+  const lbl = document.getElementById('timerBtnLabel');
+  if (running) {
+    btn.classList.remove('bg-green-600','hover:bg-green-700');
+    btn.classList.add('bg-red-500','hover:bg-red-600');
+    lbl.textContent = 'Timer stoppen';
+  } else {
+    btn.classList.remove('bg-red-500','hover:bg-red-600');
+    btn.classList.add('bg-green-600','hover:bg-green-700');
+    lbl.textContent = 'Timer starten';
+  }
+}
+async function toggleTimer() {
+  if (!_timerRunning) {
+    const r = await fetch(`/tickets/${TIMER_TID}/timer/start`, {
+      method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+      body: new URLSearchParams({_csrf_token: '{{ csrf_token() }}'})
+    });
+    if (!r.ok) return;
+    _timerStartEpoch = Date.now();
+    setTimerUi(true);
+    _timerInterval = setInterval(tickTimer, 1000);
+    tickTimer();
+  } else {
+    clearInterval(_timerInterval);
+    const r = await fetch(`/tickets/${TIMER_TID}/timer/stop`, {
+      method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+      body: new URLSearchParams({_csrf_token: '{{ csrf_token() }}'})
+    });
+    const data = await r.json();
+    setTimerUi(false);
+    document.getElementById('timerDisplay').textContent = '00:00:00';
+    // gestoppte Zeit in die Zeitfelder addieren
+    const addMin = data.minutes || 0;
+    const curH = parseInt(document.getElementById('time_h').value || '0', 10);
+    const curM = parseInt(document.getElementById('time_m').value || '0', 10);
+    let total = curH * 60 + curM + addMin;
+    document.getElementById('time_h').value = Math.floor(total / 60) || '';
+    document.getElementById('time_m').value = total % 60 || (total > 0 && total % 60 === 0 ? 0 : '');
+  }
+}
+// beim Laden prüfen, ob bereits ein Timer für dieses Ticket läuft
+(async function initTimer() {
+  try {
+    const r = await fetch(`/api/timer/${TIMER_TID}`);
+    const data = await r.json();
+    if (data.running) {
+      _timerStartEpoch = Date.now() - (data.elapsed_seconds * 1000);
+      setTimerUi(true);
+      _timerInterval = setInterval(tickTimer, 1000);
+      tickTimer();
+    }
+  } catch(_) {}
+})();
+</script>
 {% endblock %}

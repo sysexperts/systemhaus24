@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Textbausteine{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+  <div>
+    <h1 class="text-lg font-semibold text-gray-600">Textbausteine</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Standardantworten für Ticket-Updates und E-Mails. Platzhalter: <code class="bg-gray-100 px-1 rounded">{{ '{{kunde}}' }}</code>, <code class="bg-gray-100 px-1 rounded">{{ '{{firma}}' }}</code>, <code class="bg-gray-100 px-1 rounded">{{ '{{ticket_nr}}' }}</code>, <code class="bg-gray-100 px-1 rounded">{{ '{{ticket_titel}}' }}</code>, <code class="bg-gray-100 px-1 rounded">{{ '{{mitarbeiter}}' }}</code></p>
+  </div>
+  <button onclick="openTplModal()"
+          class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+    + Neue Vorlage
+  </button>
+</div>
+
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Name</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Typ</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Vorschau</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in templates %}
+    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+      <td class="px-5 py-3 font-medium text-gray-800">{{ t.name }}</td>
+      <td class="px-5 py-3">
+        <span class="px-2.5 py-1 rounded-full text-xs font-medium {% if t.category=='email' %}bg-purple-100 text-purple-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+          {{ 'E-Mail' if t.category=='email' else 'Ticket' }}
+        </span>
+      </td>
+      <td class="px-5 py-3 text-gray-500 text-xs max-w-md truncate">{{ t.body[:90] }}{% if t.body|length > 90 %}…{% endif %}</td>
+      <td class="px-5 py-3 text-right">
+        <div class="flex items-center justify-end gap-3">
+          <button type="button"
+                  onclick='openTplModal({{ {"id": t.id, "name": t.name, "category": t.category, "subject": t.subject or "", "body": t.body}|tojson }})'
+                  class="text-[#1c3461] hover:underline text-xs font-medium">Bearbeiten</button>
+          <form method="POST" action="{{ url_for('template_delete', tid=t.id) }}" onsubmit="return confirm('Vorlage löschen?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="text-red-400 hover:text-red-600 text-xs font-medium">Löschen</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="px-5 py-12 text-center text-gray-400">Noch keine Vorlagen angelegt.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div id="tplModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+    <h2 id="tplModalTitle" class="text-base font-semibold text-gray-700 mb-4">Neue Vorlage</h2>
+    <form id="tplForm" method="POST" action="{{ url_for('template_new') }}" class="space-y-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500 font-medium">Name</label>
+          <input name="name" id="tpl_name" required placeholder="z. B. Passwort zurückgesetzt"
+                 class="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 font-medium">Typ</label>
+          <select name="category" id="tpl_category"
+                  class="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="ticket">Ticket-Update</option>
+            <option value="email">E-Mail</option>
+          </select>
+        </div>
+      </div>
+      <div id="tpl_subject_wrap">
+        <label class="text-xs text-gray-500 font-medium">Betreff (nur E-Mail)</label>
+        <input name="subject" id="tpl_subject" placeholder="z. B. Ihr Anliegen {{ '{{ticket_nr}}' }}"
+               class="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 font-medium">Text</label>
+        <textarea name="body" id="tpl_body" rows="6" required placeholder="Guten Tag {{ '{{kunde}}' }},&#10;&#10;..."
+                  class="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('tplModal').classList.add('hidden')"
+                class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors">Abbrechen</button>
+        <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const tplNewAction = "{{ url_for('template_new') }}";
+function toggleSubjectField() {
+  document.getElementById('tpl_subject_wrap').style.display =
+    document.getElementById('tpl_category').value === 'email' ? '' : 'none';
+}
+document.getElementById('tpl_category').addEventListener('change', toggleSubjectField);
+
+function openTplModal(tpl) {
+  const form = document.getElementById('tplForm');
+  if (tpl) {
+    document.getElementById('tplModalTitle').textContent = 'Vorlage bearbeiten';
+    form.action = `/templates/${tpl.id}/edit`;
+    document.getElementById('tpl_name').value = tpl.name;
+    document.getElementById('tpl_category').value = tpl.category;
+    document.getElementById('tpl_subject').value = tpl.subject;
+    document.getElementById('tpl_body').value = tpl.body;
+  } else {
+    document.getElementById('tplModalTitle').textContent = 'Neue Vorlage';
+    form.action = tplNewAction;
+    form.reset();
+  }
+  toggleSubjectField();
+  document.getElementById('tplModal').classList.remove('hidden');
+}
+toggleSubjectField();
+</script>
+{% endblock %}

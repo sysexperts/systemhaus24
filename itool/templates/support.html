@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Fernwartung{% endblock %}
+{% block content %}
+
+<div class="mb-5">
+  <h1 class="text-lg font-semibold text-gray-600">Fernwartung</h1>
+</div>
+
+<!-- Download card -->
+<div class="relative overflow-hidden rounded-2xl shadow-sm border border-white p-5 mb-4"
+     style="background: linear-gradient(135deg, #1c3461 0%, #2a4a8a 100%)">
+  <div class="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/5"></div>
+  <div class="absolute -right-2 top-10 w-16 h-16 rounded-full bg-white/5"></div>
+  <div class="relative flex items-center gap-4">
+    <div class="shrink-0 w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
+      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/>
+      </svg>
+    </div>
+    <div class="flex-1 min-w-0">
+      <h2 class="text-white font-semibold text-sm">Fernwartungs-Client für Kunden</h2>
+      <p class="text-white/70 text-xs mt-0.5">
+        Download-Link an Kunden senden. Nach der Installation teilt der Kunde die angezeigte RustDesk-ID mit,
+        die Sie dann beim Kunden als Gerät hinterlegen.
+      </p>
+    </div>
+    <a href="{{ url_for('support_download') }}"
+       class="shrink-0 inline-flex items-center gap-2 bg-white text-[#1c3461] px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-white/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-black/10 transition-all duration-150">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+      </svg>
+      Download
+    </a>
+  </div>
+</div>
+
+<!-- Search bar -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white p-4 mb-4">
+  <form method="GET" class="flex gap-3">
+    <input name="q" value="{{ q }}" placeholder="Suche nach Name, Firma..."
+           class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400">
+    <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#2a4a8a] transition-colors">Suchen</button>
+  </form>
+</div>
+
+<!-- Table card -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100">
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Name / Firma</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Status</th>
+        <th class="px-5 py-3 text-left text-xs text-gray-400 uppercase tracking-wide">Geräte</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in customers %}
+    <tr class="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+      <td class="px-5 py-3">
+        <span class="font-medium text-gray-800">{{ c.name }}</span>
+        {% if c.company %}<div class="text-xs text-gray-400">{{ c.company }}</div>{% endif %}
+      </td>
+      <td class="px-5 py-3">
+        <span class="px-2.5 py-1 rounded-full text-xs font-medium
+          {% if c.status=='customer' %}bg-green-100 text-green-700
+          {% elif c.status=='lead'   %}bg-yellow-100 text-yellow-700
+          {% else %}bg-gray-100 text-gray-500{% endif %}">
+          {{ {'lead':'Lead','customer':'Kunde','inactive':'Inaktiv'}.get(c.status, c.status) }}
+        </span>
+      </td>
+      <td class="px-5 py-3 text-gray-500">{{ c.device_count }}</td>
+      <td class="px-5 py-3 text-right">
+        <a href="{{ url_for('support_customer', cid=c.id) }}" class="text-[#1c3461] hover:underline text-xs font-medium">Geräte anzeigen →</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="px-5 py-12 text-center text-gray-400">Keine Kunden gefunden.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

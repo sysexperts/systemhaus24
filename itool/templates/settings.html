@@ -6,18 +6,20 @@
 
 
 <!-- Tabs -->
-<div class="flex gap-1 mb-5 bg-white/60 rounded-2xl p-1.5 w-fit shadow-sm border border-white">
-  {% if session.get('role') == 'admin' %}
-    {% set tab_list = [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('layout','Layout'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang'),('benachrichtigungen','Benachrichtigungen')] %}
-  {% else %}
-    {% set tab_list = [('allgemein','Allgemein'),('benachrichtigungen','Benachrichtigungen')] %}
-  {% endif %}
-  {% for tid, tlabel in tab_list %}
-  <button onclick="switchTab('{{ tid }}')" id="tab-{{ tid }}"
-          class="tab-btn px-4 py-2 rounded-xl text-sm font-medium transition-colors text-gray-500 hover:text-gray-700">
-    {{ tlabel }}
-  </button>
-  {% endfor %}
+<div class="overflow-x-auto -mx-1 px-1 mb-5">
+  <div class="flex gap-1 bg-white/60 rounded-2xl p-1.5 w-fit shadow-sm border border-white">
+    {% if session.get('role') == 'admin' %}
+      {% set tab_list = [('allgemein','Allgemein'),('firma','Firma & Abrechnung'),('layout','Layout'),('smtp','E-Mail Ausgang'),('imap','E-Mail Eingang'),('automatisierung','Automatisierung'),('berechtigungen','Berechtigungen'),('benachrichtigungen','Benachrichtigungen')] %}
+    {% else %}
+      {% set tab_list = [('allgemein','Allgemein'),('benachrichtigungen','Benachrichtigungen')] %}
+    {% endif %}
+    {% for tid, tlabel in tab_list %}
+    <button onclick="switchTab('{{ tid }}')" id="tab-{{ tid }}"
+            class="tab-btn px-4 py-2 rounded-xl text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 whitespace-nowrap">
+      {{ tlabel }}
+    </button>
+    {% endfor %}
+  </div>
 </div>
 
 <!-- ══════════════ TAB: Allgemein ══════════════ -->
@@ -80,6 +82,10 @@
           Passwort ändern
         </button>
       </form>
+    </div>
+
+    <div class="col-span-3">
+      {% include "_2fa_settings.html" %}
     </div>
 
     <!-- Konto -->
@@ -255,6 +261,30 @@
               <p class="text-xs text-gray-500 mt-0.5">Rechnungen werden ohne Umsatzsteuer ausgestellt. Auf jeder Rechnung erscheint der gesetzliche Hinweis gemäß §19 UStG.</p>
             </div>
           </label>
+        </div>
+
+        <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+          <p class="text-sm font-semibold text-gray-700 mb-1">Zahlungserinnerung</p>
+          <p class="text-xs text-gray-400 mb-4">Verschickt automatisch eine freundliche Erinnerung vor Fälligkeit einer Rechnung (zusätzlich zum Mahnwesen nach Fälligkeit).</p>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-xl border-2 transition-colors mb-3
+                        {% if cfg.get('payment_reminder_enabled')=='1' %}border-blue-400 bg-blue-50{% else %}border-gray-200 hover:border-gray-300{% endif %}">
+            <input type="checkbox" name="payment_reminder_enabled" value="1"
+                   {% if cfg.get('payment_reminder_enabled')=='1' %}checked{% endif %}
+                   class="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1c3461]"
+                   onchange="this.closest('label').classList.toggle('border-blue-400',this.checked);
+                             this.closest('label').classList.toggle('bg-blue-50',this.checked);
+                             this.closest('label').classList.toggle('border-gray-200',!this.checked)">
+            <div>
+              <p class="text-sm font-medium text-gray-800">Automatische Zahlungserinnerung aktivieren</p>
+              <p class="text-xs text-gray-500 mt-0.5">Sendet die Rechnung erneut per E-Mail mit einer freundlichen Erinnerung.</p>
+            </div>
+          </label>
+          <div>
+            <label class="text-xs text-gray-500 font-medium">Tage vor Fälligkeit</label>
+            <input type="number" name="payment_reminder_days" min="1" max="30"
+                   value="{{ cfg.get('payment_reminder_days', '3') }}"
+                   class="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 max-w-[150px]">
+          </div>
         </div>
       </div>
     </div>
@@ -522,6 +552,114 @@
   </div>
 </div>
 
+<!-- ══════════════ TAB: Automatisierung ══════════════ -->
+<div id="pane-automatisierung" class="tab-pane hidden">
+  <form method="POST" action="{{ url_for('settings') }}#automatisierung" class="space-y-5 max-w-xl">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_tab" value="automatisierung">
+
+    <p class="text-xs text-gray-400 -mt-2 mb-1">Automatische Regeln, die im Hintergrund laufen und bei Bedarf E-Mails verschicken — ohne dass ihr manuell dran denken müsst.</p>
+
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <label class="flex items-center gap-2 cursor-pointer flex-1">
+          <input type="checkbox" name="automation_ticket_stale_enabled" value="1"
+                 {% if cfg.get('automation_ticket_stale_enabled')=='1' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]">
+          <div>
+            <span class="text-sm font-medium text-gray-700">Ticket-Eskalation</span>
+            <p class="text-xs text-gray-400">Offene Tickets ohne Update lösen eine Mail an euch (Admin) aus.</p>
+          </div>
+        </label>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <input type="number" name="automation_ticket_stale_days" min="1" max="30"
+                 value="{{ cfg.get('automation_ticket_stale_days', '3') }}"
+                 class="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <span class="text-xs text-gray-400">Tage</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <label class="flex items-center gap-2 cursor-pointer flex-1">
+          <input type="checkbox" name="automation_quote_stale_enabled" value="1"
+                 {% if cfg.get('automation_quote_stale_enabled')=='1' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]">
+          <div>
+            <span class="text-sm font-medium text-gray-700">Angebot-Nachfassen</span>
+            <p class="text-xs text-gray-400">Versendete Angebote ohne Reaktion lösen eine Erinnerungsmail an den Kunden aus.</p>
+          </div>
+        </label>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <input type="number" name="automation_quote_stale_days" min="1" max="60"
+                 value="{{ cfg.get('automation_quote_stale_days', '7') }}"
+                 class="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <span class="text-xs text-gray-400">Tage</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <label class="flex items-center gap-2 cursor-pointer flex-1">
+          <input type="checkbox" name="automation_lead_stale_enabled" value="1"
+                 {% if cfg.get('automation_lead_stale_enabled')=='1' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-[#1c3461]">
+          <div>
+            <span class="text-sm font-medium text-gray-700">Lead-Erinnerung</span>
+            <p class="text-xs text-gray-400">Leads ohne Aktivität lösen eine Erinnerungsmail an euch (Admin) aus.</p>
+          </div>
+        </label>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <input type="number" name="automation_lead_stale_days" min="1" max="90"
+                 value="{{ cfg.get('automation_lead_stale_days', '14') }}"
+                 class="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <span class="text-xs text-gray-400">Tage</span>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Automatisierung speichern
+    </button>
+  </form>
+</div>
+
+<!-- ══════════════ TAB: Berechtigungen ══════════════ -->
+<div id="pane-berechtigungen" class="tab-pane hidden">
+  <form method="POST" action="{{ url_for('settings') }}#berechtigungen" class="max-w-xl">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_tab" value="berechtigungen">
+
+    <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+      <p class="text-sm font-semibold text-gray-700 mb-1">Promoter-Berechtigungen</p>
+      <p class="text-xs text-gray-400 mb-4">Schränkt ein, welche Bereiche Benutzer mit der Rolle „Promoter" sehen und öffnen können. Angehakt = für Promoter gesperrt.</p>
+
+      <div class="space-y-2">
+        {% set promoter_modules = [
+          ('customers', 'Kunden'), ('quotes', 'Angebote'), ('invoices', 'Rechnungen'),
+          ('contracts', 'Verträge'), ('tickets', 'Tickets'), ('support', 'Fernwartung'),
+          ('documents', 'Dokumente'), ('articles', 'Leistungen'), ('akquise', 'Akquise'),
+          ('accounting', 'Buchhaltung')
+        ] %}
+        {% for mkey, mlabel in promoter_modules %}
+        <label class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
+          <input type="checkbox" name="promoter_block_{{ mkey }}" value="1"
+                 {% if cfg.get('promoter_block_' + mkey)=='1' %}checked{% endif %}
+                 class="w-4 h-4 rounded border-gray-300 text-red-500">
+          <span class="text-sm text-gray-700">{{ mlabel }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <button type="submit" class="mt-5 bg-[#1c3461] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      Berechtigungen speichern
+    </button>
+  </form>
+</div>
+
 {% endif %}
 
 <!-- ══════════════ TAB: Benachrichtigungen ══════════════ -->
@@ -570,7 +708,7 @@
 </div>
 
 <script>
-const TABS = {% if session.get('role') == 'admin' %}['allgemein','firma','layout','smtp','imap','benachrichtigungen']{% else %}['allgemein','benachrichtigungen']{% endif %};
+const TABS = {% if session.get('role') == 'admin' %}['allgemein','firma','layout','smtp','imap','automatisierung','berechtigungen','benachrichtigungen']{% else %}['allgemein','benachrichtigungen']{% endif %};
 
 function switchTab(id) {
   TABS.forEach(t => {

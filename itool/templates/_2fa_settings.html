@@ -1,0 +1,76 @@
+<!-- Zwei-Faktor-Authentifizierung (2FA) -->
+<div class="bg-white/80 rounded-2xl shadow-sm border border-white p-6">
+  <div class="flex items-center justify-between mb-1">
+    <p class="text-sm font-semibold text-gray-700">Zwei-Faktor-Authentifizierung</p>
+    {% if totp_enabled %}
+    <span class="text-[11px] font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Aktiviert</span>
+    {% else %}
+    <span class="text-[11px] font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Nicht aktiviert</span>
+    {% endif %}
+  </div>
+  <p class="text-xs text-gray-400 mb-4">Optional — schützt deinen Account zusätzlich mit einem Code aus einer Authenticator-App (z. B. Google Authenticator, Authy).</p>
+
+  {% if totp_backup_codes %}
+  <div id="backup-codes-box" class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+    <p class="text-sm font-semibold text-amber-800 mb-1">Backup-Codes — jetzt sichern!</p>
+    <p class="text-xs text-amber-700 mb-3">Jeder Code funktioniert einmal, falls du keinen Zugriff auf deine Authenticator-App hast. Diese Liste wird nur jetzt angezeigt.</p>
+    <div class="grid grid-cols-2 gap-1.5 font-mono text-xs text-amber-900 mb-3">
+      {% for c in totp_backup_codes %}<div class="bg-white rounded-lg px-2 py-1 border border-amber-200 text-center">{{ c }}</div>{% endfor %}
+    </div>
+    <button type="button" onclick="document.getElementById('backup-codes-box').remove()"
+            class="text-xs font-medium text-amber-800 hover:underline">Ich habe die Codes gespeichert</button>
+  </div>
+  {% endif %}
+
+  {% if totp_setup_secret %}
+  <div class="border border-gray-200 rounded-xl p-4">
+    <p class="text-sm font-medium text-gray-700 mb-3">1. Mit Authenticator-App scannen</p>
+    <div class="flex items-start gap-4">
+      <img src="{{ url_for('settings_2fa_qr') }}" alt="QR-Code" class="w-32 h-32 rounded-lg border border-gray-200 bg-white shrink-0">
+      <div class="min-w-0">
+        <p class="text-xs text-gray-400 mb-1">Geht der Scan nicht? Manuell eingeben:</p>
+        <p class="font-mono text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 break-all">{{ totp_setup_secret }}</p>
+      </div>
+    </div>
+    <form method="POST" action="{{ url_for('settings_2fa_enable') }}" class="mt-4 flex gap-2">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input name="code" type="text" inputmode="numeric" placeholder="6-stelliger Code" required
+             class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors whitespace-nowrap">
+        Bestätigen
+      </button>
+    </form>
+  </div>
+  {% elif totp_enabled %}
+  <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200 mb-3">
+    <div>
+      <p class="text-sm text-gray-700 font-medium">Gemerkte Geräte</p>
+      <p class="text-xs text-gray-400">{{ trusted_device_count }} Gerät{{ 'e' if trusted_device_count != 1 else '' }} muss/müssen aktuell keinen Code eingeben.</p>
+    </div>
+    {% if trusted_device_count > 0 %}
+    <form method="POST" action="{{ url_for('settings_2fa_revoke_devices') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="text-xs font-medium text-gray-500 hover:text-red-500 hover:underline whitespace-nowrap">Alle abmelden</button>
+    </form>
+    {% endif %}
+  </div>
+  <details class="group">
+    <summary class="text-sm text-red-500 hover:underline cursor-pointer list-none">2FA deaktivieren</summary>
+    <form method="POST" action="{{ url_for('settings_2fa_disable') }}" class="flex gap-2 mt-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input name="current_password" type="password" placeholder="Aktuelles Passwort zur Bestätigung" required
+             class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300">
+      <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-600 transition-colors whitespace-nowrap">
+        Deaktivieren
+      </button>
+    </form>
+  </details>
+  {% else %}
+  <form method="POST" action="{{ url_for('settings_2fa_start') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">
+      2FA einrichten
+    </button>
+  </form>
+  {% endif %}
+</div>

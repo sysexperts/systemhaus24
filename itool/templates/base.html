@@ -29,19 +29,65 @@
 
   /* Sidebar */
   #sidebar {
-    width: 64px;
+    width: 68px;
     transition: width 0.25s cubic-bezier(.4,0,.2,1);
     overflow-x: hidden;
     overflow-y: auto;
     white-space: nowrap;
+    background: linear-gradient(180deg, #1b1d24 0%, #15161b 100%) !important;
+    border-right: 1px solid rgba(255,255,255,0.07);
+    box-shadow: 1px 0 0 rgba(0,0,0,0.15) !important;
   }
-  #sidebar.expanded { width: 220px; }
+  #sidebar.expanded { width: 226px; }
   #sidebar .sidebar-logo { max-height: 40px; max-width: 56px; transition: max-height 0.15s, max-width 0.15s; }
   #sidebar.expanded .sidebar-logo { max-height: 64px; max-width: 200px; }
   #sidebar .lbl { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
   #sidebar.expanded .lbl { opacity: 1; pointer-events: auto; }
   #sidebar .submenu { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; }
   #sidebar.expanded .submenu.open { max-height: 200px; }
+
+  /* Refined, professional nav states — thin strokes, subtle depth, single accent indicator */
+  #sidebar svg { stroke-width: 1.6 !important; }
+  #sidebar a, #sidebar button { letter-spacing: 0.01em; }
+
+  #sidebar [class*="bg-white/20"] {
+    background: rgba(255,255,255,0.055) !important;
+    box-shadow: inset 3px 0 0 -1px var(--accent);
+    border-radius: 12px !important;
+    position: relative;
+  }
+  #sidebar [class*="bg-white/20"]::before {
+    content: "";
+    position: absolute;
+    left: 2px; top: 20%; bottom: 20%;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 3px;
+  }
+  #sidebar [class*="bg-white/20"] svg,
+  #sidebar [class*="bg-white/20"] > span.lbl {
+    color: #fff !important;
+    opacity: 1 !important;
+  }
+  #sidebar [class*="hover:bg-white/10"]:hover {
+    background: rgba(255,255,255,0.04) !important;
+  }
+
+  /* Search / toggle "pill" controls get a faint outline for definition */
+  #sidebar > button[onclick^="toggleSidebar"],
+  #sidebar > button[onclick^="openSearch"] {
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+  }
+  #sidebar > button[onclick^="toggleSidebar"]:hover,
+  #sidebar > button[onclick^="openSearch"]:hover {
+    border-color: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05) !important;
+  }
+
+  /* Submenu items: quieter by default, brighten on hover/active */
+  #sidebar .submenu a { border-left: 1.5px solid rgba(255,255,255,0.08); margin-left: 2px; }
+  #sidebar .submenu a:hover { border-left-color: rgba(255,255,255,0.25); }
 
   /* Team-Feed panel */
   #team-feed { width: 288px; position: relative; transition: opacity 0.15s ease; }
@@ -58,6 +104,64 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+
+  /* Any card that directly wraps a full-width table scrolls horizontally instead of breaking layout */
+  div:has(> table.w-full) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  div:has(> table.w-full) > table { min-width: 640px; }
+
+  /* ─── Mobile (<768px): sidebar becomes an off-canvas drawer, team-feed hides, tighter spacing ─── */
+  #mobile-topbar { display: none; }
+  #sidebar-backdrop { display: none; }
+  @media (max-width: 767px) {
+    #mobile-topbar { display: flex; }
+    body.flex.h-screen.overflow-hidden { padding-top: 56px; }
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 240px !important;
+      transform: translateX(-100%);
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+      z-index: 50;
+      padding-top: 1rem;
+    }
+    #sidebar.mobile-open { transform: translateX(0); }
+    #sidebar .lbl { opacity: 1 !important; pointer-events: auto !important; }
+    #sidebar-backdrop.mobile-open {
+      display: block;
+      position: fixed; inset: 0; z-index: 40;
+      background: rgba(0,0,0,0.45);
+    }
+    main { padding: 0.9rem !important; }
+    #team-feed { display: none !important; }
+    #feed-reopen-btn { display: none !important; }
+    .flex.h-screen.overflow-hidden { flex-direction: column; }
+    table.w-full { min-width: 560px; }
+
+    /* Page header rows (title + action buttons) stack instead of overflowing */
+    main [class*="justify-between"] { flex-wrap: wrap; row-gap: 0.6rem; }
+    main [class*="justify-between"] > [class*="flex"][class*="gap-"] { flex-wrap: wrap; }
+
+    /* Filter/search bars (GET forms) wrap instead of squeezing inputs off-screen */
+    main form[method="GET"] { flex-wrap: wrap; row-gap: 0.5rem; }
+    main form[method="GET"] input,
+    main form[method="GET"] select { min-width: 140px; flex: 1 1 auto; }
+
+    /* Hardcoded multi-column grids collapse on narrow phones (unless a page already
+       defines its own sm:/md: breakpoint, in which case that design is left alone) */
+    main [class*="grid-cols-3"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]),
+    main [class*="grid-cols-4"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]),
+    main [class*="grid-cols-5"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]) {
+      grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    }
+  }
+  @media (max-width: 480px) {
+    main [class*="grid-cols-2"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]),
+    main [class*="grid-cols-3"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]),
+    main [class*="grid-cols-4"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]),
+    main [class*="grid-cols-5"]:not([class*="sm:grid-cols"]):not([class*="md:grid-cols"]):not([class*="lg:grid-cols"]):not([class*="xl:grid-cols"]) {
+      grid-template-columns: 1fr !important;
+    }
+  }
 
   /* ─── Dark Mode: overrides the light utility classes (same pattern as accent) ─── */
   html.dark body { background-color: #151a23; color: #e4e9f1; }
@@ -91,10 +195,22 @@
 
 {% if session.user_id %}
 
+  <!-- Mobile topbar (hamburger + logo), only visible <768px -->
+  <div id="mobile-topbar" class="fixed top-0 left-0 right-0 z-30 items-center gap-3 px-4 h-14 bg-[#15161b] border-b border-white/10">
+    <button onclick="openMobileSidebar()" class="w-9 h-9 -ml-1.5 rounded-lg flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors" aria-label="Menü öffnen">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+    </button>
+    {% if app_cfg.get('company_logo_ext') %}
+    <img src="{{ url_for('company_logo') }}" alt="Logo" class="h-7 object-contain opacity-90">
+    {% endif %}
+  </div>
+  <div id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
+
   <!-- Sidebar -->
   {% set accent = app_cfg.get('accent_color','#1c3461') %}
-  <aside id="sidebar" class="flex flex-col py-4 shrink-0 shadow-xl relative z-20"
-         style="background: linear-gradient(160deg, {{ shade_hex(accent, 1.3) }} 0%, {{ accent }} 60%, {{ shade_hex(accent, 0.55) }} 100%)">
+  <aside id="sidebar" class="flex flex-col py-4 shrink-0 relative z-20">
 
     <!-- Logo (immer zentriert, immer sichtbar) -->
     <div class="flex items-center justify-center px-1 mb-2" style="min-height:64px">
@@ -121,7 +237,6 @@
       <kbd class="lbl text-[10px] text-white/40 border border-white/20 rounded px-1.5 py-0.5">⌘K</kbd>
     </button>
 
-
     <!-- Dashboard -->
     <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if request.endpoint=='dashboard' %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
       <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,6 +245,7 @@
       <span class="lbl text-sm text-white font-medium">Dashboard</span>
     </a>
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_customers') != '1' %}
     <!-- Kunden -->
     <div class="mx-2 mb-1">
       <button onclick="toggleMenu('menu-kunden', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'customer' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -149,7 +265,9 @@
         <a href="{{ url_for('customers', status='lead') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Leads</a>
       </div>
     </div>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_quotes') != '1' %}
     <!-- Angebote -->
     <a href="{{ url_for('quotes') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if 'quote' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
       <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,7 +275,9 @@
       </svg>
       <span class="lbl text-sm text-white font-medium">Angebote</span>
     </a>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_invoices') != '1' %}
     <!-- Rechnungen -->
     <div class="mx-2 mb-1">
       <button onclick="toggleMenu('menu-inv', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'invoice' in (request.endpoint or '') or 'recurring' in (request.endpoint or '') or 'dunning' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors relative">
@@ -178,7 +298,9 @@
         <a href="{{ url_for('dunning_list') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Mahnwesen</a>
       </div>
     </div>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_contracts') != '1' %}
     <!-- Verträge -->
     <a href="{{ url_for('contracts_list') }}" class="flex items-center gap-3 px-3 py-2 mx-2 rounded-xl {% if 'contract' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors mb-1">
       <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -186,10 +308,12 @@
       </svg>
       <span class="lbl text-sm text-white font-medium">Verträge</span>
     </a>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_tickets') != '1' %}
     <!-- Tickets -->
     <div class="mx-2 mb-1">
-      <button onclick="toggleMenu('menu-tick', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'ticket' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+      <a href="{{ url_for('tickets') }}" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'ticket' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
         <div class="relative shrink-0">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
@@ -200,14 +324,28 @@
         <svg class="lbl w-3 h-3 text-white/50 shrink-0 menu-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
         </svg>
-      </button>
+      </a>
       <div id="menu-tick" class="submenu pl-8 mt-1 space-y-0.5 {% if 'ticket' in (request.endpoint or '') %}open{% endif %}">
         <a href="{{ url_for('tickets') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Alle Tickets</a>
         <a href="{{ url_for('tickets', status='open') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Offen</a>
         <a href="{{ url_for('tickets', status='in_progress') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">In Arbeit</a>
       </div>
     </div>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_support') != '1' %}
+    <!-- Support (Remote-Zugriff) -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('support') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'support' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Fernwartung</span>
+      </a>
+    </div>
+    {% endif %}
+
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_documents') != '1' %}
     <!-- Dokumente -->
     <div class="mx-2 mb-1">
       <a href="{{ url_for('documents') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'document' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -217,7 +355,9 @@
         <span class="lbl text-sm text-white font-medium">Dokumente</span>
       </a>
     </div>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_articles') != '1' %}
     <!-- Leistungen -->
     <div class="mx-2 mb-1">
       <a href="{{ url_for('articles') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'article' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -227,9 +367,21 @@
         <span class="lbl text-sm text-white font-medium">Leistungen</span>
       </a>
     </div>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' %}
+    <!-- Textbausteine -->
+    <div class="mx-2 mb-1">
+      <a href="{{ url_for('templates_list') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'template' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
+        <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <span class="lbl text-sm text-white font-medium">Textbausteine</span>
+      </a>
+    </div>
+    {% endif %}
 
-
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_akquise') != '1' %}
     <!-- Akquise -->
     <div class="mx-2 mb-1">
       <a href="{{ url_for('akquise') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl {% if 'akquise' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -239,7 +391,9 @@
         <span class="lbl text-sm text-white font-medium">Akquise</span>
       </a>
     </div>
+    {% endif %}
 
+    {% if session.get('role') != 'promoter' or app_cfg.get('promoter_block_accounting') != '1' %}
     <!-- Buchhaltung -->
     <div class="mx-2 mb-1">
       <button onclick="toggleMenu('menu-buch', this)" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl {% if 'accounting' in (request.endpoint or '') or 'time_report' in (request.endpoint or '') %}bg-white/20{% else %}hover:bg-white/10{% endif %} transition-colors">
@@ -256,6 +410,7 @@
         <a href="{{ url_for('time_report') }}" class="block px-3 py-1.5 rounded-lg text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors">Zeitauswertung</a>
       </div>
     </div>
+    {% endif %}
 
     {% if session.get('role') == 'admin' %}
     <!-- Einstellungen -->
@@ -308,18 +463,26 @@
     <div class="mt-auto mx-2 space-y-1">
       <div class="border-t border-white/10 my-1"></div>
       <!-- User row -->
-      <a href="{{ url_for('settings') }}#allgemein" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors">
-        <div class="w-7 h-7 rounded-full shrink-0 overflow-hidden border-2 border-white/30">
-          {% if current_user_avatar %}
-          <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover">
-          {% else %}
-          <div class="w-full h-full bg-[#2a4a8a] flex items-center justify-center">
-            <span class="text-white text-xs font-bold">{{ (session.display_name or session.username)[0].upper() }}</span>
+      <div class="flex items-center gap-1 rounded-xl hover:bg-white/10 transition-colors">
+        <a href="{{ url_for('settings') }}#allgemein" class="flex items-center gap-3 px-3 py-2 flex-1 min-w-0">
+          <div class="w-7 h-7 rounded-full shrink-0 overflow-hidden border-2 border-white/30">
+            {% if current_user_avatar %}
+            <img src="{{ url_for('user_avatar', uid=session.user_id) }}" class="w-full h-full object-cover">
+            {% else %}
+            <div class="w-full h-full bg-[#2a4a8a] flex items-center justify-center">
+              <span class="text-white text-xs font-bold">{{ (session.display_name or session.username)[0].upper() }}</span>
+            </div>
+            {% endif %}
           </div>
-          {% endif %}
-        </div>
-        <span class="lbl text-xs text-white/60 font-medium">{{ session.display_name or session.username }}</span>
-      </a>
+          <span class="lbl text-xs text-white/60 font-medium truncate">{{ session.display_name or session.username }}</span>
+        </a>
+        <button onclick="openNotifHistory()" title="Benachrichtigungen" class="lbl relative shrink-0 p-1.5 mr-1.5 rounded-lg hover:bg-white/10 transition-colors">
+          <svg class="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          <span id="notif-badge" class="hidden absolute top-0.5 right-0.5 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">0</span>
+        </button>
+      </div>
       <a href="{{ url_for('logout') }}" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors" title="Logout">
         <svg class="w-5 h-5 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
@@ -406,6 +569,21 @@
     </div>
   </div>
 
+  <!-- Benachrichtigungs-Verlauf -->
+  <div id="notif-history-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-24 p-4" onclick="if(event.target===this) closeNotifHistory()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100">
+        <p class="text-sm font-semibold text-gray-800">Benachrichtigungen</p>
+        <button onclick="closeNotifHistory()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="notif-history-list" class="max-h-[65vh] overflow-y-auto p-2">
+        <p class="text-center text-sm text-gray-300 py-8">Lädt…</p>
+      </div>
+    </div>
+  </div>
+
 {% else %}
   {% block content_unauth %}{% endblock %}
 {% endif %}
@@ -434,6 +612,22 @@ document.querySelectorAll('.submenu.open').forEach(m => {
   const btn = m.previousElementSibling;
   if (btn) { const a = btn.querySelector('.menu-arrow'); if (a) a.style.transform = 'rotate(180deg)'; }
 });
+
+// Mobile off-canvas sidebar
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+function openMobileSidebar() {
+  sidebar.classList.add('mobile-open', 'expanded');
+  sidebarBackdrop.classList.add('mobile-open');
+  document.body.style.overflow = 'hidden';
+}
+function closeMobileSidebar() {
+  sidebar.classList.remove('mobile-open');
+  sidebarBackdrop.classList.remove('mobile-open');
+  document.body.style.overflow = '';
+}
+if (window.matchMedia('(max-width: 767px)').matches && sidebar) {
+  sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobileSidebar));
+}
 
 // Team-Feed panel: close / reopen / resize
 const teamFeed = document.getElementById('team-feed');
@@ -904,15 +1098,20 @@ function playNotifSound(type) {
 
 // ── Benachrichtigungen (alle User) ──────────────────────────────────────────
 const _shownNotifs = new Set();
+const _notifTimeouts = {};
 
-function showNotifToast(n) {
+function showNotifToast(n, isPinned) {
   if (_shownNotifs.has(n.id)) return;
   _shownNotifs.add(n.id);
-  if (n.sound !== '0') playNotifSound(n.type);
+  if (!isPinned && n.sound !== '0') playNotifSound(n.type);
 
+  const pinCls = isPinned ? 'text-amber-500' : 'text-gray-300';
   const toast = document.createElement('div');
-  toast.className = 'fixed bottom-6 right-6 z-[9999] max-w-sm w-full bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden';
-  toast.style.cssText = 'animation: slideInRight .35s cubic-bezier(.21,1.02,.73,1) forwards';
+  toast.id = `toast-${n.id}`;
+  toast.className = 'notif-toast fixed right-6 z-[9999] max-w-sm w-full bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden';
+  toast.style.bottom = '1.5rem';
+  toast.style.transition = 'bottom .25s ease';
+  toast.style.animation = 'slideInRight .35s cubic-bezier(.21,1.02,.73,1) forwards';
   toast.innerHTML = `
     <div class="flex items-start gap-3 p-4">
       <div class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" style="background:var(--accent)">
@@ -924,32 +1123,87 @@ function showNotifToast(n) {
       <div class="flex-1 min-w-0">
         <p class="text-sm font-semibold text-gray-900">${esc(n.title)}</p>
         <p class="text-xs text-gray-500 mt-0.5">${esc(n.body)}</p>
-        ${n.link ? `<a href="${n.link}" class="text-xs font-medium mt-1.5 inline-block" style="color:var(--accent)">Zum Promoter →</a>` : ''}
+        ${n.link ? `<a href="${n.link}" class="text-xs font-medium mt-1.5 inline-block" style="color:var(--accent)">Ansehen →</a>` : ''}
       </div>
-      <button onclick="dismissNotif(${n.id}, this.closest('div.fixed'))"
-        class="shrink-0 text-gray-300 hover:text-gray-500 transition-colors ml-1">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
+      <div class="shrink-0 flex flex-col items-center gap-1.5 ml-1">
+        <button onclick="togglePinToast(${n.id}, this)" title="Anheften, damit die Meldung nicht verschwindet"
+          class="${pinCls} hover:text-amber-500 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12l-2 9 9-2 9-9-7-7-9 9zm0 0l7 7"/>
+          </svg>
+        </button>
+        <button onclick="dismissNotif(${n.id}, this.closest('div.fixed'))" title="Schließen"
+          class="text-gray-300 hover:text-gray-500 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="h-1 w-full" style="background:var(--accent);opacity:.25">
-      <div class="h-full" style="background:var(--accent);animation:shrinkBar 8s linear forwards" id="bar-${n.id}"></div>
+      <div class="h-full" style="background:var(--accent);${isPinned ? '' : 'animation:shrinkBar 8s linear forwards'}" id="bar-${n.id}"></div>
     </div>`;
   document.body.appendChild(toast);
+  repositionToasts();
 
-  setTimeout(() => dismissNotif(n.id, toast), 8000);
+  if (isPinned) return;
+
+  _notifTimeouts[n.id] = setTimeout(() => dismissNotif(n.id, toast), 8000);
+}
+
+function repositionToasts() {
+  const toasts = Array.from(document.querySelectorAll('.notif-toast'));
+  let bottom = 24; // 1.5rem
+  const gap = 16;
+  toasts.forEach((t, i) => {
+    t.style.bottom = bottom + 'px';
+    t.style.zIndex = 9999 + i;
+    bottom += t.offsetHeight + gap;
+  });
+}
+
+function togglePinToast(id, btn) {
+  fetch(`/api/notifications/${id}/pin`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+    body: new FormData(Object.assign(document.createElement('form'), {innerHTML: '<input name="_csrf_token" value="{{ csrf_token() }}">'}))
+  }).then(r => r.json()).then(data => {
+    if (data.pinned) {
+      if (_notifTimeouts[id]) { clearTimeout(_notifTimeouts[id]); delete _notifTimeouts[id]; }
+      const bar = document.getElementById(`bar-${id}`);
+      if (bar) bar.style.animationPlayState = 'paused';
+      btn.classList.add('text-amber-500');
+      btn.classList.remove('text-gray-300');
+    } else {
+      btn.classList.remove('text-amber-500');
+      btn.classList.add('text-gray-300');
+      const toast = document.getElementById(`toast-${id}`);
+      if (toast) _notifTimeouts[id] = setTimeout(() => dismissNotif(id, toast), 8000);
+    }
+  }).catch(() => {});
 }
 
 function dismissNotif(id, el) {
+  if (_notifTimeouts[id]) { clearTimeout(_notifTimeouts[id]); delete _notifTimeouts[id]; }
   if (!el || !el.parentNode) return;
   el.style.animation = 'slideOutRight .3s ease forwards';
-  setTimeout(() => el.remove(), 300);
+  setTimeout(() => { el.remove(); repositionToasts(); }, 300);
   fetch(`/api/notifications/${id}/read`, {
     method: 'POST',
     headers: {'X-CSRFToken': '{{ csrf_token() }}'},
     body: new FormData(Object.assign(document.createElement('form'), {innerHTML: '<input name="_csrf_token" value="{{ csrf_token() }}">'}))
   }).catch(() => {});
+}
+
+function updateNotifBadge(count) {
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
 }
 
 async function pollNotifications() {
@@ -958,9 +1212,81 @@ async function pollNotifications() {
     if (!res.ok) return;
     const items = await res.json();
     items.forEach(showNotifToast);
+    updateNotifBadge(items.length);
   } catch(_) {}
 }
 
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'gerade eben';
+  if (diff < 3600) return Math.floor(diff / 60) + ' Min.';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' Std.';
+  return Math.floor(diff / 86400) + ' Tage';
+}
+
+async function openNotifHistory() {
+  const modal = document.getElementById('notif-history-modal');
+  modal.classList.remove('hidden');
+  const list = document.getElementById('notif-history-list');
+  list.innerHTML = '<p class="text-center text-sm text-gray-300 py-8">Lädt…</p>';
+  try {
+    const res = await fetch('/api/notifications/history');
+    const items = await res.json();
+    if (!items.length) {
+      list.innerHTML = '<p class="text-center text-sm text-gray-300 py-8">Keine Benachrichtigungen.</p>';
+      return;
+    }
+    list.innerHTML = items.map(n => `
+      <div class="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors ${n.pinned ? 'bg-amber-50/60' : ''}">
+        <div class="shrink-0 w-2 h-2 rounded-full mt-2 ${n.is_read ? 'bg-transparent' : 'bg-blue-500'}"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-gray-800">${esc(n.title)}</p>
+          <p class="text-xs text-gray-500 mt-0.5">${esc(n.body)}</p>
+          <div class="flex items-center gap-3 mt-1">
+            <span class="text-[11px] text-gray-400">${timeAgo(n.created_at)}</span>
+            ${n.link ? `<a href="${n.link}" class="text-[11px] font-medium" style="color:var(--accent)">Ansehen →</a>` : ''}
+          </div>
+        </div>
+        <button onclick="togglePinHistory(${n.id}, this)" title="Anheften"
+          class="shrink-0 ${n.pinned ? 'text-amber-500' : 'text-gray-300'} hover:text-amber-500 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12l-2 9 9-2 9-9-7-7-9 9zm0 0l7 7"/>
+          </svg>
+        </button>
+      </div>`).join('');
+  } catch (e) {
+    list.innerHTML = '<p class="text-center text-sm text-red-400 py-8">Fehler beim Laden.</p>';
+  }
+}
+
+function closeNotifHistory() {
+  document.getElementById('notif-history-modal').classList.add('hidden');
+}
+
+function togglePinHistory(id, btn) {
+  fetch(`/api/notifications/${id}/pin`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+    body: new FormData(Object.assign(document.createElement('form'), {innerHTML: '<input name="_csrf_token" value="{{ csrf_token() }}">'}))
+  }).then(r => r.json()).then(data => {
+    btn.classList.toggle('text-amber-500', data.pinned);
+    btn.classList.toggle('text-gray-300', !data.pinned);
+    const openToastBtn = document.querySelector(`#toast-${id} button[onclick^="togglePinToast(${id}"]`);
+    if (openToastBtn) { openToastBtn.classList.toggle('text-amber-500', data.pinned); openToastBtn.classList.toggle('text-gray-300', !data.pinned); }
+  }).catch(() => {});
+}
+
+async function loadPinnedToasts() {
+  try {
+    const res = await fetch('/api/notifications/pinned');
+    if (!res.ok) return;
+    const items = await res.json();
+    items.forEach(n => showNotifToast(n, true));
+  } catch(_) {}
+}
+
+loadPinnedToasts();
 pollNotifications();
 setInterval(pollNotifications, 30000);
 </script>

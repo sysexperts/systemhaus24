@@ -1,0 +1,45 @@
+{# Durchgehender Ablauf: Angebot → Auftrag → Rechnung → Bezahlt.
+   Erwartet: quote (oder None), invoice (oder None). #}
+{% macro flow_steps(quote, invoice) %}
+  {% set q_status = quote.status if quote else None %}
+  {% set i_status = invoice.status if invoice else None %}
+  {% set rejected = (q_status == 'rejected') %}
+
+  {% set step_angebot = 'done' if quote else 'todo' %}
+  {% set step_auftrag = 'done' if (q_status in ('accepted','invoiced') or invoice) else ('cancel' if rejected else 'todo') %}
+  {% set step_rechnung = 'done' if invoice else 'todo' %}
+  {% set step_bezahlt = 'done' if (i_status == 'paid') else 'todo' %}
+
+  {% set steps = [
+    ('Angebot', step_angebot),
+    ('Auftrag', step_auftrag),
+    ('Rechnung', step_rechnung),
+    ('Bezahlt', step_bezahlt)
+  ] %}
+
+  <div class="bg-white/80 rounded-2xl shadow-sm border border-white p-4 mb-4">
+    <div class="flex items-center">
+      {% for label, state in steps %}
+      <div class="flex items-center {% if not loop.last %}flex-1{% endif %}">
+        <div class="flex flex-col items-center gap-1.5 shrink-0">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
+            {% if state == 'done' %}bg-green-500 text-white
+            {% elif state == 'cancel' %}bg-red-100 text-red-500
+            {% else %}bg-gray-100 text-gray-400{% endif %}">
+            {% if state == 'done' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+            {% elif state == 'cancel' %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+            {% else %}{{ loop.index }}{% endif %}
+          </div>
+          <span class="text-[11px] font-medium whitespace-nowrap
+            {% if state == 'done' %}text-gray-700{% elif state == 'cancel' %}text-red-500{% else %}text-gray-400{% endif %}">{{ label }}</span>
+        </div>
+        {% if not loop.last %}
+        <div class="flex-1 h-0.5 mx-1 -mt-4 rounded {% if steps[loop.index][1] == 'done' %}bg-green-400{% else %}bg-gray-200{% endif %}"></div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endmacro %}

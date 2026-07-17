@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import socket
 import threading
 import time
 import imaplib
@@ -24,6 +25,9 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from database import get_db, init_db, next_customer_number
+import pyotp
+import qrcode
+import qrcode.image.svg
 
 app = Flask(__name__)
 _secret = os.environ.get("SECRET_KEY", "")
@@ -63,6 +67,104 @@ def decrypt_secret(ciphertext: str) -> str:
         return ""
     from cryptography.fernet import Fernet
     return Fernet(_fernet()).decrypt(ciphertext[7:].encode()).decode()
+
+# ── RustDesk online status (queries hbbs directly via its rendezvous protocol) ──
+
+RUSTDESK_HBBS_HOST = "rustdesk.systemhaus24.net"
+RUSTDESK_HBBS_PORT = 21115  # nat-test port; also handles OnlineRequest
+
+def _rd_varint(n):
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        if n:
+            out.append(b | 0x80)
+        else:
+            out.append(b)
+            break
+    return bytes(out)
+
+def _rd_read_varint(buf, pos):
+    result = 0
+    shift = 0
+    while True:
+        b = buf[pos]
+        pos += 1
+        result |= (b & 0x7F) << shift
+        if not (b & 0x80):
+            break
+        shift += 7
+    return result, pos
+
+def _rd_frame_header(n):
+    if n <= 0x3F:
+        return bytes([n << 2])
+    elif n <= 0x3FFF:
+        return ((n << 2) | 0x1).to_bytes(2, "little")
+    elif n <= 0x3FFFFF:
+        h = (n << 2) | 0x2
+        return (h & 0xFFFF).to_bytes(2, "little") + bytes([h >> 16])
+    else:
+        return ((n << 2) | 0x3).to_bytes(4, "little")
+
+def rustdesk_online_status(peer_ids, timeout=4):
+    """Queries hbbs's OnlineRequest/OnlineResponse rendezvous message to check,
+    per RustDesk ID, whether the client is currently registered (re-registers
+    every ~30s while running). Returns {id: bool}. On any error, all False."""
+    if not peer_ids:
+        return {}
+    online_req = b""
+    for pid in peer_ids:
+        pid_b = pid.encode()
+        online_req += bytes([0x12]) + _rd_varint(len(pid_b)) + pid_b
+    tag = _rd_varint((23 << 3) | 2)
+    msg = tag + _rd_varint(len(online_req)) + online_req
+    frame = _rd_frame_header(len(msg)) + msg
+
+    result = {pid: False for pid in peer_ids}
+    try:
+        with socket.create_connection((RUSTDESK_HBBS_HOST, RUSTDESK_HBBS_PORT), timeout=timeout) as s:
+            s.sendall(frame)
+            s.settimeout(timeout)
+            data = s.recv(4096)
+        if not data:
+            return result
+        head_len = (data[0] & 0x3) + 1
+        n = 0
+        for i in range(head_len):
+            n |= data[i] << (8 * i)
+        n >>= 2
+        body = data[head_len:head_len + n]
+        p = 0
+        states = b""
+        while p < len(body):
+            t, p = _rd_read_varint(body, p)
+            field_no, wire_type = t >> 3, t & 0x7
+            if wire_type != 2:
+                break
+            length, p = _rd_read_varint(body, p)
+            value = body[p:p + length]
+            p += length
+            if field_no == 24:
+                p2 = 0
+                while p2 < len(value):
+                    t2, p2 = _rd_read_varint(value, p2)
+                    fn2, wt2 = t2 >> 3, t2 & 0x7
+                    if wt2 != 2:
+                        break
+                    l2, p2 = _rd_read_varint(value, p2)
+                    v2 = value[p2:p2 + l2]
+                    p2 += l2
+                    if fn2 == 1:
+                        states = v2
+        for i, pid in enumerate(peer_ids):
+            byte_idx, bit_idx = i // 8, 7 - (i % 8)
+            if byte_idx < len(states):
+                result[pid] = bool(states[byte_idx] & (1 << bit_idx))
+    except Exception:
+        pass
+    return result
 
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 
@@ -228,6 +330,26 @@ def login_required(f):
 # CSRF check for all state-changing requests from logged-in users
 _CSRF_EXEMPT = {"login", "promoter_register", "referral_landing", "static"}
 
+# Modules a promoter's access can be restricted to via Einstellungen -> Berechtigungen.
+# Matching mirrors the substring checks already used for sidebar highlighting in base.html.
+PROMOTER_MODULES = {
+    "documents":  ("Dokumente",      lambda ep: "document" in ep),
+    "customers":  ("Kunden",         lambda ep: "customer" in ep),
+    "invoices":   ("Rechnungen",     lambda ep: "invoice" in ep or "recurring" in ep or "dunning" in ep),
+    "quotes":     ("Angebote",       lambda ep: "quote" in ep or "angebot" in ep),
+    "tickets":    ("Tickets",        lambda ep: "ticket" in ep),
+    "support":    ("Fernwartung",    lambda ep: "support" in ep),
+    "articles":   ("Leistungen",     lambda ep: "article" in ep),
+    "akquise":    ("Akquise",        lambda ep: "akquise" in ep or ep.startswith("lead")),
+    "accounting": ("Buchhaltung",    lambda ep: "accounting" in ep or "time_report" in ep or "expense" in ep),
+    "contracts":  ("Verträge",       lambda ep: "contract" in ep),
+}
+
+
+def _promoter_module_allowed(module_key, cfg):
+    return cfg.get(f"promoter_block_{module_key}") != "1"
+
+
 @app.before_request
 def enforce_csrf_and_session():
     # Session timeout: log out after 8h of inactivity
@@ -238,6 +360,19 @@ def enforce_csrf_and_session():
             flash("Sitzung abgelaufen. Bitte erneut anmelden.", "error")
             return redirect(url_for("login"))
         session["_last_active"] = time.time()
+
+    # Promoter-Berechtigungen: bestimmte Module können vom Admin gesperrt werden
+    if session.get("role") == "promoter":
+        endpoint = request.endpoint or ""
+        for module_key, (label, matches) in PROMOTER_MODULES.items():
+            if matches(endpoint):
+                db = get_db()
+                cfg = get_settings(db)
+                db.close()
+                if not _promoter_module_allowed(module_key, cfg):
+                    flash(f"Kein Zugriff auf „{label}“.", "error")
+                    return redirect(url_for("promoter_dashboard"))
+                break
 
     # CSRF
     if request.method not in ("POST", "PUT", "DELETE", "PATCH"):
@@ -433,6 +568,20 @@ def setup():
     return render_template("setup.html", error=None)
 
 
+def _finish_login(user, ip, db):
+    session["user_id"] = user["id"]
+    session["username"] = user["username"]
+    session["display_name"] = user["display_name"] or user["username"]
+    session["role"] = user["role"] or "admin"
+    log_activity(db, "angemeldet", "Login", user["id"], user["username"], f"IP: {ip}")
+    db.commit()
+    db.close()
+    resp = make_response(redirect(url_for("dashboard")))
+    resp.set_cookie("last_uid",          str(user["id"]),                          max_age=30*24*3600)
+    resp.set_cookie("last_display_name", user["display_name"] or user["username"], max_age=30*24*3600)
+    return resp
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if _no_users_exist():
@@ -446,18 +595,21 @@ def login():
         user = db.execute("SELECT * FROM users WHERE username=%s", (request.form.get("username", ""),)).fetchone()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             _clear_attempts(ip)
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
-            session["display_name"] = user["display_name"] or user["username"]
-            session["role"] = user["role"] or "admin"
-            log_activity(db, "angemeldet", "Login", user["id"], user["username"], f"IP: {ip}")
-            db.commit()
-            db.close()
-            dest = url_for("dashboard")
-            resp = make_response(redirect(dest))
-            resp.set_cookie("last_uid",          str(user["id"]),                          max_age=30*24*3600)
-            resp.set_cookie("last_display_name", user["display_name"] or user["username"], max_age=30*24*3600)
-            return resp
+            if user["totp_enabled"]:
+                cookie_val = request.cookies.get(f"td_{user['id']}")
+                if cookie_val:
+                    trusted = db.execute(
+                        "SELECT id, token_hash FROM trusted_devices WHERE user_id=%s AND expires_at > NOW()",
+                        (user["id"],)
+                    ).fetchall()
+                    for t in trusted:
+                        if check_password_hash(t["token_hash"], cookie_val):
+                            return _finish_login(user, ip, db)
+                db.close()
+                session["_2fa_pending_uid"] = user["id"]
+                session["_2fa_ip"] = ip
+                return redirect(url_for("login_2fa"))
+            return _finish_login(user, ip, db)
         _record_attempt(ip)
         log_activity(db, "Anmeldung fehlgeschlagen", "Login", None,
                      request.form.get("username", "")[:80], f"IP: {ip}")
@@ -465,6 +617,59 @@ def login():
         db.close()
         flash("Falscher Benutzername oder Passwort", "error")
     return render_template("login.html")
+
+
+@app.route("/login/2fa", methods=["GET", "POST"])
+def login_2fa():
+    uid = session.get("_2fa_pending_uid")
+    if not uid:
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        ip = session.get("_2fa_ip", request.remote_addr or "unknown")
+        if _check_rate_limit(ip):
+            flash("Zu viele Versuche. Bitte 5 Minuten warten.", "error")
+            return render_template("login_2fa.html")
+        db = get_db()
+        user = db.execute("SELECT * FROM users WHERE id=%s", (uid,)).fetchone()
+        if not user or not user["totp_enabled"]:
+            session.pop("_2fa_pending_uid", None)
+            db.close()
+            return redirect(url_for("login"))
+        code = request.form.get("code", "").strip().replace(" ", "")
+        totp = pyotp.TOTP(user["totp_secret"])
+        valid = totp.verify(code, valid_window=1)
+        if not valid:
+            # Check backup codes (comma-separated hashes)
+            backup_hashes = (user["totp_backup_codes"] or "").split(",")
+            for i, bh in enumerate(backup_hashes):
+                if bh and check_password_hash(bh, code):
+                    valid = True
+                    backup_hashes.pop(i)
+                    db.execute("UPDATE users SET totp_backup_codes=%s WHERE id=%s",
+                               (",".join(backup_hashes), uid))
+                    break
+        if valid:
+            _clear_attempts(ip)
+            session.pop("_2fa_pending_uid", None)
+            session.pop("_2fa_ip", None)
+            remember_days = int(request.form.get("remember_days", 0) or 0)
+            device_token = None
+            if remember_days > 0:
+                device_token = secrets.token_urlsafe(32)
+                db.execute(
+                    "INSERT INTO trusted_devices (user_id, token_hash, label, expires_at) VALUES (%s,%s,%s,NOW() + INTERVAL '%s days')",
+                    (user["id"], generate_password_hash(device_token), request.headers.get("User-Agent", "")[:200], remember_days)
+                )
+            resp = _finish_login(user, ip, db)
+            if device_token:
+                resp.set_cookie(f"td_{user['id']}", device_token, max_age=remember_days * 86400,
+                                 httponly=True, samesite="Lax", secure=True, path="/")
+            return resp
+        _record_attempt(ip)
+        db.commit()
+        db.close()
+        flash("Falscher Code", "error")
+    return render_template("login_2fa.html")
 
 
 @app.route("/logout")
@@ -716,6 +921,162 @@ def customer_detail(cid):
                            revenue_total=revenue_total, contacts=contacts)
 
 
+@app.route("/support")
+@login_required
+def support():
+    db = get_db()
+    q = request.args.get("q", "")
+    query = """
+        SELECT c.*, COUNT(rd.id) AS device_count
+        FROM customers c
+        LEFT JOIN remote_devices rd ON rd.customer_id = c.id
+        WHERE 1=1
+    """
+    params = []
+    if q:
+        query += " AND (c.name LIKE %s OR c.company LIKE %s)"
+        params += [f"%{q}%", f"%{q}%"]
+    query += " GROUP BY c.id ORDER BY c.name ASC"
+    customers_rows = db.execute(query, params).fetchall()
+    db.close()
+    return render_template("support.html", customers=customers_rows, q=q)
+
+
+@app.route("/support/<int:cid>")
+@login_required
+def support_customer(cid):
+    db = get_db()
+    customer = db.execute("SELECT * FROM customers WHERE id=%s", (cid,)).fetchone()
+    if not customer:
+        db.close()
+        flash("Kunde nicht gefunden", "error")
+        return redirect(url_for("support"))
+    devices = db.execute(
+        "SELECT * FROM remote_devices WHERE customer_id=%s ORDER BY created_at ASC", (cid,)
+    ).fetchall()
+    db.close()
+    return render_template("support_customer.html", customer=customer, devices=devices)
+
+
+@app.route("/support/<int:cid>/online-status")
+@login_required
+def support_online_status(cid):
+    db = get_db()
+    devices = db.execute(
+        "SELECT id, rustdesk_id FROM remote_devices WHERE customer_id=%s", (cid,)
+    ).fetchall()
+    db.close()
+    rd_ids = [d["rustdesk_id"] for d in devices]
+    status_by_rd_id = rustdesk_online_status(rd_ids)
+    return jsonify({d["id"]: status_by_rd_id.get(d["rustdesk_id"], False) for d in devices})
+
+
+@app.route("/support/<int:cid>/devices/add", methods=["POST"])
+@login_required
+def support_device_add(cid):
+    db = get_db()
+    customer = db.execute("SELECT id FROM customers WHERE id=%s", (cid,)).fetchone()
+    if not customer:
+        db.close()
+        flash("Kunde nicht gefunden", "error")
+        return redirect(url_for("support"))
+    device_name = request.form.get("device_name", "").strip()
+    rustdesk_id = request.form.get("rustdesk_id", "").strip().replace(" ", "")
+    password = request.form.get("rustdesk_password", "").strip()
+    notes = request.form.get("notes", "").strip()
+    if not device_name or not rustdesk_id:
+        db.close()
+        flash("Gerätename und RustDesk-ID sind erforderlich", "error")
+        return redirect(url_for("support_customer", cid=cid))
+    db.execute(
+        "INSERT INTO remote_devices (customer_id, device_name, rustdesk_id, rustdesk_password, notes) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (cid, device_name, rustdesk_id, encrypt_secret(password) if password else "", notes),
+    )
+    db.commit()
+    db.close()
+    flash("Gerät hinzugefügt", "success")
+    return redirect(url_for("support_customer", cid=cid))
+
+
+@app.route("/support/<int:cid>/devices/<int:did>")
+@login_required
+def support_device_get(cid, did):
+    db = get_db()
+    device = db.execute(
+        "SELECT * FROM remote_devices WHERE id=%s AND customer_id=%s", (did, cid)
+    ).fetchone()
+    db.close()
+    if not device:
+        abort(404)
+    return jsonify({
+        "id": device["id"],
+        "device_name": device["device_name"],
+        "rustdesk_id": device["rustdesk_id"],
+        "rustdesk_password": decrypt_secret(device["rustdesk_password"]) if device["rustdesk_password"] else "",
+        "notes": device["notes"] or "",
+    })
+
+
+@app.route("/support/<int:cid>/devices/<int:did>/edit", methods=["POST"])
+@login_required
+def support_device_edit(cid, did):
+    db = get_db()
+    device = db.execute(
+        "SELECT id FROM remote_devices WHERE id=%s AND customer_id=%s", (did, cid)
+    ).fetchone()
+    if not device:
+        db.close()
+        flash("Gerät nicht gefunden", "error")
+        return redirect(url_for("support_customer", cid=cid))
+    device_name = request.form.get("device_name", "").strip()
+    rustdesk_id = request.form.get("rustdesk_id", "").strip().replace(" ", "")
+    password = request.form.get("rustdesk_password", "").strip()
+    notes = request.form.get("notes", "").strip()
+    if not device_name or not rustdesk_id:
+        db.close()
+        flash("Gerätename und RustDesk-ID sind erforderlich", "error")
+        return redirect(url_for("support_customer", cid=cid))
+    db.execute(
+        "UPDATE remote_devices SET device_name=%s, rustdesk_id=%s, rustdesk_password=%s, notes=%s WHERE id=%s AND customer_id=%s",
+        (device_name, rustdesk_id, encrypt_secret(password) if password else "", notes, did, cid),
+    )
+    db.commit()
+    db.close()
+    flash("Gerät aktualisiert", "success")
+    return redirect(url_for("support_customer", cid=cid))
+
+
+@app.route("/support/<int:cid>/devices/<int:did>/delete", methods=["POST"])
+@login_required
+def support_device_delete(cid, did):
+    db = get_db()
+    db.execute("DELETE FROM remote_devices WHERE id=%s AND customer_id=%s", (did, cid))
+    db.commit()
+    db.close()
+    flash("Gerät gelöscht", "success")
+    return redirect(url_for("support_customer", cid=cid))
+
+
+@app.route("/support/<int:cid>/devices/<int:did>/password")
+@login_required
+def support_device_password(cid, did):
+    db = get_db()
+    device = db.execute(
+        "SELECT rustdesk_password FROM remote_devices WHERE id=%s AND customer_id=%s", (did, cid)
+    ).fetchone()
+    db.close()
+    if not device:
+        abort(404)
+    return jsonify({"password": decrypt_secret(device["rustdesk_password"]) if device["rustdesk_password"] else ""})
+
+
+@app.route("/support/download")
+def support_download():
+    downloads_dir = os.path.join(app.root_path, "data", "downloads")
+    return send_from_directory(downloads_dir, "SystemHaus24-RustDesk-Setup.zip", as_attachment=True)
+
+
 @app.route("/customers/<int:cid>/status", methods=["POST"])
 @login_required
 def customer_status(cid):
@@ -843,10 +1204,11 @@ def invoice_view(iid):
     items = db.execute("SELECT * FROM invoice_items WHERE invoice_id=%s", (iid,)).fetchall()
     total = sum(it["quantity"] * it["unit_price"] for it in items)
     email_log = db.execute("SELECT * FROM invoice_emails WHERE invoice_id=%s ORDER BY sent_at DESC", (iid,)).fetchall()
+    source_quote = db.execute("SELECT id, number, status FROM quotes WHERE invoice_id=%s", (iid,)).fetchone()
     cfg = get_settings(db)
     db.close()
     return render_template("invoice_view.html", invoice=invoice, items=items, total=total,
-                           email_log=email_log, cfg=cfg)
+                           email_log=email_log, cfg=cfg, source_quote=source_quote)
 
 
 def generate_invoice_pdf_bytes(iid, db):
@@ -1180,10 +1542,13 @@ def quote_view(qid):
         abort(404)
     items = db.execute("SELECT * FROM quote_items WHERE quote_id=%s", (qid,)).fetchall()
     total = sum(it["quantity"] * it["unit_price"] for it in items)
+    linked_invoice = None
+    if quote["invoice_id"]:
+        linked_invoice = db.execute("SELECT id, number, status FROM invoices WHERE id=%s", (quote["invoice_id"],)).fetchone()
     cfg = get_settings(db)
     db.close()
     return render_template("quote_view.html", quote=quote, items=items, total=total, cfg=cfg,
-                           status_labels=QUOTE_STATUS_LABELS)
+                           status_labels=QUOTE_STATUS_LABELS, linked_invoice=linked_invoice)
 
 
 def generate_quote_pdf_bytes(qid, db):
@@ -1467,16 +1832,24 @@ def send_smtp_email(to_addr, subject, body_text, settings=None):
 def tickets():
     db = get_db()
     status = request.args.get("status", "")
-    query = """SELECT t.*, c.name as customer_name FROM tickets t
+    q = request.args.get("q", "").strip()
+    query = """SELECT t.*, c.name as customer_name, c.company as customer_company FROM tickets t
                LEFT JOIN customers c ON t.customer_id=c.id WHERE 1=1"""
     params = []
     if status:
         query += " AND t.status=%s"
         params.append(status)
+    if q:
+        if q.lstrip("#").isdigit():
+            query += " AND (t.id=%s OR t.title ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s)"
+            params += [int(q.lstrip("#")), f"%{q}%", f"%{q}%", f"%{q}%"]
+        else:
+            query += " AND (t.title ILIKE %s OR c.name ILIKE %s OR c.company ILIKE %s)"
+            params += [f"%{q}%", f"%{q}%", f"%{q}%"]
     query += " ORDER BY t.created_at DESC"
     rows = db.execute(query, params).fetchall()
     db.close()
-    return render_template("tickets.html", tickets=rows, status=status)
+    return render_template("tickets.html", tickets=rows, status=status, q=q)
 
 
 @app.route("/tickets/new", methods=["GET", "POST"])
@@ -1652,6 +2025,160 @@ def ticket_send_email(tid):
         flash(f"E-Mail-Fehler: {e}", "error")
     db.close()
     return redirect(url_for("ticket_detail", tid=tid))
+
+
+# ── Ticket-Timer (Zeiterfassung) ──────────────────────────────────────────────
+
+@app.route("/tickets/<int:tid>/timer/start", methods=["POST"])
+@login_required
+def ticket_timer_start(tid):
+    db = get_db()
+    uid = session["user_id"]
+    db.execute(
+        """INSERT INTO ticket_timers (user_id, ticket_id, started_at) VALUES (%s,%s,CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id) DO UPDATE SET ticket_id=%s, started_at=CURRENT_TIMESTAMP""",
+        (uid, tid, tid))
+    db.commit()
+    db.close()
+    return jsonify(ok=True)
+
+
+@app.route("/tickets/<int:tid>/timer/stop", methods=["POST"])
+@login_required
+def ticket_timer_stop(tid):
+    db = get_db()
+    uid = session["user_id"]
+    row = db.execute(
+        "SELECT ticket_id, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) AS secs FROM ticket_timers WHERE user_id=%s",
+        (uid,)).fetchone()
+    minutes = 0
+    if row and row["ticket_id"] == tid:
+        minutes = max(1, int(round(float(row["secs"]) / 60.0)))  # mind. 1 Minute
+        db.execute("DELETE FROM ticket_timers WHERE user_id=%s", (uid,))
+        db.commit()
+    db.close()
+    return jsonify(ok=True, minutes=minutes)
+
+
+@app.route("/api/timer/<int:tid>")
+@login_required
+def api_timer_status(tid):
+    db = get_db()
+    uid = session["user_id"]
+    row = db.execute(
+        "SELECT ticket_id, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) AS secs FROM ticket_timers WHERE user_id=%s",
+        (uid,)).fetchone()
+    db.close()
+    if row and row["ticket_id"] == tid:
+        return jsonify(running=True, elapsed_seconds=int(float(row["secs"])))
+    running_elsewhere = row["ticket_id"] if row else None
+    return jsonify(running=False, running_on_ticket=running_elsewhere)
+
+
+# ── Textbausteine / Vorlagen ──────────────────────────────────────────────────
+
+def _apply_template_placeholders(text, ctx):
+    """Replaces {{platzhalter}} in a template with values from ctx."""
+    if not text:
+        return text
+    for key, val in ctx.items():
+        text = text.replace("{{" + key + "}}", str(val or ""))
+    return text
+
+
+@app.route("/templates")
+@login_required
+def templates_list():
+    db = get_db()
+    rows = db.execute("SELECT * FROM text_templates ORDER BY category, name").fetchall()
+    db.close()
+    return render_template("templates.html", templates=rows)
+
+
+@app.route("/templates/new", methods=["POST"])
+@login_required
+def template_new():
+    name = request.form.get("name", "").strip()
+    category = request.form.get("category", "ticket")
+    subject = request.form.get("subject", "").strip()
+    body = request.form.get("body", "").strip()
+    if not name or not body:
+        flash("Name und Text sind erforderlich.", "error")
+        return redirect(url_for("templates_list"))
+    db = get_db()
+    db.execute(
+        "INSERT INTO text_templates (name, category, subject, body, created_by) VALUES (%s,%s,%s,%s,%s)",
+        (name, category, subject, body, session.get("username")))
+    db.commit()
+    db.close()
+    flash("Vorlage gespeichert.", "success")
+    return redirect(url_for("templates_list"))
+
+
+@app.route("/templates/<int:tid>/edit", methods=["POST"])
+@login_required
+def template_edit(tid):
+    name = request.form.get("name", "").strip()
+    category = request.form.get("category", "ticket")
+    subject = request.form.get("subject", "").strip()
+    body = request.form.get("body", "").strip()
+    if not name or not body:
+        flash("Name und Text sind erforderlich.", "error")
+        return redirect(url_for("templates_list"))
+    db = get_db()
+    db.execute(
+        "UPDATE text_templates SET name=%s, category=%s, subject=%s, body=%s WHERE id=%s",
+        (name, category, subject, body, tid))
+    db.commit()
+    db.close()
+    flash("Vorlage aktualisiert.", "success")
+    return redirect(url_for("templates_list"))
+
+
+@app.route("/templates/<int:tid>/delete", methods=["POST"])
+@login_required
+def template_delete(tid):
+    db = get_db()
+    db.execute("DELETE FROM text_templates WHERE id=%s", (tid,))
+    db.commit()
+    db.close()
+    flash("Vorlage gelöscht.", "success")
+    return redirect(url_for("templates_list"))
+
+
+@app.route("/api/templates")
+@login_required
+def api_templates():
+    """Returns templates for insertion, with placeholders resolved for the given ticket."""
+    category = request.args.get("category", "")
+    ticket_id = request.args.get("ticket_id", "")
+    db = get_db()
+    if category:
+        rows = db.execute("SELECT * FROM text_templates WHERE category=%s ORDER BY name", (category,)).fetchall()
+    else:
+        rows = db.execute("SELECT * FROM text_templates ORDER BY name").fetchall()
+    ctx = {}
+    if ticket_id.isdigit():
+        t = db.execute("""SELECT t.id, t.title, c.name as customer_name, c.company as customer_company
+                          FROM tickets t LEFT JOIN customers c ON t.customer_id=c.id WHERE t.id=%s""",
+                       (int(ticket_id),)).fetchone()
+        if t:
+            ctx = {
+                "ticket_nr": f"#{t['id']}",
+                "ticket_titel": t["title"],
+                "kunde": t["customer_name"] or "",
+                "firma": t["customer_company"] or "",
+                "mitarbeiter": session.get("display_name") or session.get("username") or "",
+            }
+    db.close()
+    result = []
+    for r in rows:
+        result.append({
+            "id": r["id"], "name": r["name"], "category": r["category"],
+            "subject": _apply_template_placeholders(r["subject"], ctx),
+            "body": _apply_template_placeholders(r["body"], ctx),
+        })
+    return jsonify(result)
 
 
 # ── Akquise ───────────────────────────────────────────────────────────────────
@@ -1997,6 +2524,71 @@ def api_notification_read(nid):
     return jsonify(ok=True)
 
 
+@app.route("/api/notifications/<int:nid>/pin", methods=["POST"])
+@login_required
+def api_notification_pin(nid):
+    uid = session["user_id"]
+    db = get_db()
+    row = db.execute(
+        "SELECT id FROM notifications WHERE id=%s AND (target_user_id=%s OR target_user_id IS NULL)", (nid, uid)
+    ).fetchone()
+    if not row:
+        db.close()
+        abort(404)
+    existing = db.execute(
+        "SELECT 1 FROM notification_pins WHERE notification_id=%s AND user_id=%s", (nid, uid)
+    ).fetchone()
+    if existing:
+        db.execute("DELETE FROM notification_pins WHERE notification_id=%s AND user_id=%s", (nid, uid))
+        pinned = False
+    else:
+        db.execute("INSERT INTO notification_pins (notification_id, user_id) VALUES (%s,%s)", (nid, uid))
+        pinned = True
+    db.commit()
+    db.close()
+    return jsonify(ok=True, pinned=pinned)
+
+
+@app.route("/api/notifications/pinned")
+@login_required
+def api_notifications_pinned():
+    """Notifications this specific user has pinned — rendered as persistent
+    bottom-right toasts on every page load until they unpin them."""
+    uid = session["user_id"]
+    db = get_db()
+    rows = db.execute("""
+        SELECT n.id, n.type, n.title, n.body, n.link
+        FROM notifications n JOIN notification_pins p ON p.notification_id = n.id
+        WHERE p.user_id=%s ORDER BY p.pinned_at ASC
+    """, (uid,)).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/notifications/history")
+@login_required
+def api_notifications_history():
+    uid = session["user_id"]
+    is_admin = session.get("role") == "admin"
+    db = get_db()
+    scope = "WHERE target_user_id=%s OR target_user_id IS NULL" if is_admin else "WHERE target_user_id=%s"
+    rows = db.execute(f"""
+        SELECT n.id, n.type, n.title, n.body, n.link, n.is_read, n.created_at,
+               (p.notification_id IS NOT NULL) as pinned
+        FROM notifications n
+        LEFT JOIN notification_pins p ON p.notification_id = n.id AND p.user_id=%s
+        {scope}
+        ORDER BY pinned DESC, n.created_at DESC LIMIT 50
+    """, (uid, uid)).fetchall()
+    db.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["created_at"] = d["created_at"].isoformat() if d["created_at"] else None
+        result.append(d)
+    return jsonify(result)
+
+
 @app.route("/api/users")
 @login_required
 def api_users():
@@ -2198,8 +2790,16 @@ def profile():
     db = get_db()
     user = db.execute("SELECT * FROM users WHERE id=%s", (session["user_id"],)).fetchone()
     notif_prefs = get_user_notif_prefs(session["user_id"], db)
+    trusted_count = db.execute(
+        "SELECT COUNT(*) FROM trusted_devices WHERE user_id=%s AND expires_at > NOW()", (session["user_id"],)
+    ).fetchone()[0]
     db.close()
-    return render_template("profile.html", user=user, notif_prefs=notif_prefs)
+    backup_codes = session.pop("_2fa_backup_codes_shown", None)
+    return render_template("profile.html", user=user, notif_prefs=notif_prefs,
+                           totp_enabled=bool(user["totp_enabled"]),
+                           totp_setup_secret=session.get("_2fa_setup_secret"),
+                           totp_backup_codes=backup_codes,
+                           trusted_device_count=trusted_count)
 
 
 @app.route("/favicon.ico")
@@ -2353,6 +2953,7 @@ SETTING_KEYS_BY_TAB = {
         "company_name", "company_street", "company_zip", "company_city",
         "company_phone", "company_email", "company_website", "company_tax_id",
         "company_iban", "company_bic", "company_bank", "company_kleingewerbe",
+        "payment_reminder_enabled", "payment_reminder_days",
     ],
     "layout": [
         "accent_color", "chat_position",
@@ -2365,6 +2966,12 @@ SETTING_KEYS_BY_TAB = {
         "imap_host", "imap_port", "imap_user", "imap_pass",
         "imap_enabled", "imap_folder", "imap_auto_ticket",
     ],
+    "automatisierung": [
+        "automation_ticket_stale_enabled", "automation_ticket_stale_days",
+        "automation_quote_stale_enabled", "automation_quote_stale_days",
+        "automation_lead_stale_enabled", "automation_lead_stale_days",
+    ],
+    "berechtigungen": [f"promoter_block_{k}" for k in PROMOTER_MODULES],
 }
 
 
@@ -2410,8 +3017,17 @@ def settings():
     cfg = get_settings(db)
     uid = session["user_id"]
     notif_prefs = get_user_notif_prefs(uid, db)
+    current_user = db.execute("SELECT totp_enabled FROM users WHERE id=%s", (uid,)).fetchone()
+    trusted_count = db.execute(
+        "SELECT COUNT(*) FROM trusted_devices WHERE user_id=%s AND expires_at > NOW()", (uid,)
+    ).fetchone()[0]
     db.close()
-    return render_template("settings.html", cfg=cfg, notif_prefs=notif_prefs)
+    backup_codes = session.pop("_2fa_backup_codes_shown", None)
+    return render_template("settings.html", cfg=cfg, notif_prefs=notif_prefs,
+                           totp_enabled=bool(current_user["totp_enabled"]),
+                           totp_setup_secret=session.get("_2fa_setup_secret"),
+                           totp_backup_codes=backup_codes,
+                           trusted_device_count=trusted_count)
 
 
 @app.route("/settings/notifications", methods=["POST"])
@@ -2584,6 +3200,90 @@ def settings_change_password():
     db.close()
     dest = url_for("settings") + "#allgemein" if session.get("role") == "admin" else url_for("profile")
     return redirect(dest)
+
+
+def _2fa_redirect_dest():
+    return url_for("settings") + "#allgemein" if session.get("role") == "admin" else url_for("profile")
+
+
+@app.route("/settings/2fa/start", methods=["POST"])
+@login_required
+def settings_2fa_start():
+    """Generates a pending TOTP secret (not yet saved to the user) and shows a QR code to scan."""
+    secret = pyotp.random_base32()
+    session["_2fa_setup_secret"] = secret
+    return redirect(_2fa_redirect_dest())
+
+
+@app.route("/settings/2fa/qr")
+@login_required
+def settings_2fa_qr():
+    secret = session.get("_2fa_setup_secret")
+    if not secret:
+        abort(404)
+    db = get_db()
+    user = db.execute("SELECT username FROM users WHERE id=%s", (session["user_id"],)).fetchone()
+    db.close()
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user["username"], issuer_name="Systemhaus24")
+    from io import BytesIO
+    factory = qrcode.image.svg.SvgPathImage
+    img = qrcode.make(uri, image_factory=factory, box_size=8, border=2)
+    buf = BytesIO()
+    img.save(buf)
+    return app.response_class(buf.getvalue(), mimetype="image/svg+xml")
+
+
+@app.route("/settings/2fa/enable", methods=["POST"])
+@login_required
+def settings_2fa_enable():
+    secret = session.get("_2fa_setup_secret")
+    code = request.form.get("code", "").strip().replace(" ", "")
+    if not secret:
+        flash("Bitte 2FA-Einrichtung erneut starten.", "error")
+        return redirect(_2fa_redirect_dest())
+    if not pyotp.TOTP(secret).verify(code, valid_window=1):
+        flash("Falscher Code. Bitte erneut versuchen.", "error")
+        return redirect(_2fa_redirect_dest())
+    backup_codes = [secrets.token_hex(4).upper() for _ in range(8)]
+    hashed = ",".join(generate_password_hash(c) for c in backup_codes)
+    db = get_db()
+    db.execute("UPDATE users SET totp_secret=%s, totp_enabled=1, totp_backup_codes=%s WHERE id=%s",
+               (secret, hashed, session["user_id"]))
+    db.commit()
+    db.close()
+    session.pop("_2fa_setup_secret", None)
+    session["_2fa_backup_codes_shown"] = backup_codes
+    flash("Zwei-Faktor-Authentifizierung wurde aktiviert.", "success")
+    return redirect(_2fa_redirect_dest())
+
+
+@app.route("/settings/2fa/disable", methods=["POST"])
+@login_required
+def settings_2fa_disable():
+    current = request.form.get("current_password", "")
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=%s", (session["user_id"],)).fetchone()
+    if not check_password_hash(user["password_hash"], current):
+        flash("Passwort ist falsch.", "error")
+    else:
+        db.execute("UPDATE users SET totp_secret=NULL, totp_enabled=0, totp_backup_codes=NULL WHERE id=%s",
+                   (session["user_id"],))
+        db.execute("DELETE FROM trusted_devices WHERE user_id=%s", (session["user_id"],))
+        db.commit()
+        flash("Zwei-Faktor-Authentifizierung wurde deaktiviert.", "success")
+    db.close()
+    return redirect(_2fa_redirect_dest())
+
+
+@app.route("/settings/2fa/revoke-devices", methods=["POST"])
+@login_required
+def settings_2fa_revoke_devices():
+    db = get_db()
+    db.execute("DELETE FROM trusted_devices WHERE user_id=%s", (session["user_id"],))
+    db.commit()
+    db.close()
+    flash("Alle gemerkten Geräte wurden abgemeldet.", "success")
+    return redirect(_2fa_redirect_dest())
 
 
 @app.route("/settings/test-smtp", methods=["POST"])
@@ -3243,30 +3943,52 @@ def accounting():
 @login_required
 def accounting_export_csv():
     import csv, io
+    von = request.args.get("von", "")
+    bis = request.args.get("bis", "")
     db = get_db()
-    rows = db.execute("""
+    cfg = get_settings(db)
+    is_kg = cfg.get("company_kleingewerbe") == "1"
+    query = """
         SELECT i.number, i.date, i.due_date, i.status,
                c.name as customer_name, c.company as customer_company,
                COALESCE((SELECT SUM(quantity*unit_price) FROM invoice_items WHERE invoice_id=i.id),0) as netto
         FROM invoices i LEFT JOIN customers c ON c.id=i.customer_id
         WHERE i.status IN ('sent','paid')
-        ORDER BY i.date DESC
-    """).fetchall()
+    """
+    params = []
+    if von:
+        query += " AND i.date >= %s"
+        params.append(von)
+    if bis:
+        query += " AND i.date <= %s"
+        params.append(bis)
+    query += " ORDER BY i.date ASC"
+    rows = db.execute(query, params).fetchall()
     db.close()
 
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
-    w.writerow(["Rechnungsnr.", "Datum", "Fällig", "Status", "Kunde", "Firma", "Netto (€)"])
+    tax_rate = 0 if is_kg else 19
+    w.writerow(["Belegnummer", "Belegdatum", "Fälligkeitsdatum", "Status", "Kunde", "Firma",
+                "Netto (€)", "USt-Satz (%)", "USt-Betrag (€)", "Brutto (€)", "Buchungstext"])
     for r in rows:
+        netto = float(r["netto"])
+        ust = 0 if is_kg else round(netto * 0.19, 2)
+        brutto_amount = netto if is_kg else round(netto + ust, 2)
+        buchungstext = f"Rechnung {r['number']} – {r['customer_company'] or r['customer_name'] or ''}"
         w.writerow([r["number"], r["date"], r["due_date"] or "", r["status"],
                     r["customer_name"] or "", r["customer_company"] or "",
-                    f"{r['netto']:.2f}".replace(".", ",")])
+                    f"{netto:.2f}".replace(".", ","), str(tax_rate),
+                    f"{ust:.2f}".replace(".", ","),
+                    f"{brutto_amount:.2f}".replace(".", ","),
+                    buchungstext])
 
     from flask import Response
+    fname = f"buchhaltung_{von or 'alle'}_{bis or 'alle'}.csv"
     return Response(
         "﻿" + buf.getvalue(),  # BOM for Excel
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=buchhaltung.csv"}
+        headers={"Content-Disposition": f"attachment; filename={fname}"}
     )
 
 
@@ -3383,7 +4105,168 @@ def _create_invoice_from_recurring(db, rec):
     db.execute("UPDATE recurring_invoices SET next_date=%s, last_created=%s WHERE id=%s",
                (new_next, rec["next_date"], rec["id"]))
     print(f"[RECURRING] Rechnung {num} für Vorlage '{rec['name']}' erstellt (nächste: {new_next})")
+
+    if rec["auto_send"]:
+        customer = db.execute("SELECT name, email FROM customers WHERE id=%s", (rec["customer_id"],)).fetchone()
+        if customer and customer["email"]:
+            try:
+                cfg = get_settings(db)
+                pdf_bytes = generate_invoice_pdf_bytes(inv_id, db)
+                subject = f"Rechnung {num}"
+                body = (f"Guten Tag {customer['name']},\n\n"
+                        f"anbei erhalten Sie die Rechnung {num} für '{rec['name']}'.\n\n"
+                        f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Systemhaus24')}")
+                _smtp_send_pdf(cfg, customer["email"], subject, body, pdf_bytes, f"Rechnung_{num}.pdf")
+                db.execute("INSERT INTO invoice_emails (invoice_id, to_addr, subject, sent_by) VALUES (%s,%s,%s,%s)",
+                           (inv_id, customer["email"], subject, "automatisch"))
+                db.execute("UPDATE invoices SET status='sent' WHERE id=%s", (inv_id,))
+                print(f"[RECURRING] Rechnung {num} automatisch an {customer['email']} gesendet")
+            except Exception as e:
+                print(f"[RECURRING] Auto-Versand fehlgeschlagen für Rechnung {num}: {e}")
     return inv_id
+
+
+def check_payment_reminders():
+    """Background job: sends a friendly reminder email N days before an invoice's due date."""
+    while True:
+        try:
+            db = get_db()
+            cfg = get_settings(db)
+            if cfg.get("payment_reminder_enabled") == "1":
+                days_before = int(cfg.get("payment_reminder_days", 3) or 3)
+                target_date = (date.today() + timedelta(days=days_before)).isoformat()
+                due = db.execute("""
+                    SELECT i.*, c.name as customer_name, c.email as customer_email
+                    FROM invoices i JOIN customers c ON i.customer_id = c.id
+                    WHERE i.status='sent' AND i.due_date=%s AND i.reminder_sent_at IS NULL
+                """, (target_date,)).fetchall()
+                for inv in due:
+                    if not inv["customer_email"]:
+                        continue
+                    try:
+                        pdf_bytes = generate_invoice_pdf_bytes(inv["id"], db)
+                        subject = f"Zahlungserinnerung: Rechnung {inv['number']} wird bald fällig"
+                        body = (f"Guten Tag {inv['customer_name']},\n\n"
+                                f"wir möchten Sie freundlich daran erinnern, dass Rechnung {inv['number']} "
+                                f"am {date.fromisoformat(inv['due_date']).strftime('%d.%m.%Y')} fällig wird.\n\n"
+                                f"Die Rechnung finden Sie zu Ihrer Information nochmal anbei.\n\n"
+                                f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Systemhaus24')}")
+                        _smtp_send_pdf(cfg, inv["customer_email"], subject, body, pdf_bytes, f"Rechnung_{inv['number']}.pdf")
+                        db.execute("UPDATE invoices SET reminder_sent_at=%s WHERE id=%s",
+                                   (datetime.now().isoformat(), inv["id"]))
+                        db.commit()
+                        print(f"[REMINDER] Zahlungserinnerung für Rechnung {inv['number']} an {inv['customer_email']} gesendet")
+                    except Exception as e:
+                        print(f"[REMINDER] Fehlgeschlagen für Rechnung {inv['number']}: {e}")
+            db.close()
+        except Exception as e:
+            print(f"[REMINDER] Fehler: {e}")
+        time.sleep(6 * 3600)  # prüfe alle 6 Stunden
+
+
+def _automation_already_sent(db, rule_key, entity_id):
+    row = db.execute(
+        "SELECT 1 FROM automation_log WHERE rule_key=%s AND entity_id=%s", (rule_key, entity_id)
+    ).fetchone()
+    return row is not None
+
+
+def _automation_mark_sent(db, rule_key, entity_id):
+    db.execute(
+        "INSERT INTO automation_log (rule_key, entity_id) VALUES (%s,%s) ON CONFLICT (rule_key, entity_id) DO NOTHING",
+        (rule_key, entity_id)
+    )
+
+
+def check_automation_rules():
+    """Background job: built-in automation rules (Odoo/Dolibarr-style) —
+    escalates stale tickets, follows up on unanswered quotes, nudges cold leads."""
+    while True:
+        try:
+            db = get_db()
+            cfg = get_settings(db)
+            admin_email = cfg.get("error_notify_email", "").strip() or cfg.get("company_email", "").strip()
+
+            # 1) Ticket-Eskalation: offene Tickets ohne Update seit X Tagen -> Mail an Admin
+            if cfg.get("automation_ticket_stale_enabled") == "1" and admin_email:
+                days = int(cfg.get("automation_ticket_stale_days", 3) or 3)
+                cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+                stale = db.execute("""
+                    SELECT t.*, c.name as customer_name, c.company as customer_company
+                    FROM tickets t LEFT JOIN customers c ON c.id=t.customer_id
+                    WHERE t.status IN ('open','in_progress') AND t.updated_at < %s
+                """, (cutoff,)).fetchall()
+                for t in stale:
+                    rule_key = "ticket_stale"
+                    if _automation_already_sent(db, rule_key, t["id"]):
+                        continue
+                    try:
+                        subject = f"[Eskalation] Ticket #{t['id']} seit {days} Tagen ohne Update"
+                        body = (f"Das Ticket \"{t['title']}\" (Kunde: {t['customer_company'] or t['customer_name'] or '–'}) "
+                                f"hat seit {days} Tagen kein Update erhalten (Status: {t['status']}).\n\n"
+                                f"Bitte im Tool unter Tickets #{t['id']} prüfen.")
+                        send_smtp_email(admin_email, subject, body, cfg)
+                        _automation_mark_sent(db, rule_key, t["id"])
+                        db.commit()
+                        print(f"[AUTOMATION] Ticket-Eskalation für #{t['id']} gesendet")
+                    except Exception as e:
+                        print(f"[AUTOMATION] Ticket-Eskalation fehlgeschlagen für #{t['id']}: {e}")
+
+            # 2) Angebot-Nachfassen: versendete Angebote ohne Reaktion seit X Tagen -> Erinnerungsmail an Kunden
+            if cfg.get("automation_quote_stale_enabled") == "1":
+                days = int(cfg.get("automation_quote_stale_days", 7) or 7)
+                cutoff = (date.today() - timedelta(days=days)).isoformat()
+                stale = db.execute("""
+                    SELECT q.*, c.name as customer_name, c.email as customer_email
+                    FROM quotes q JOIN customers c ON c.id=q.customer_id
+                    WHERE q.status='sent' AND q.date <= %s
+                """, (cutoff,)).fetchall()
+                for q in stale:
+                    rule_key = "quote_stale"
+                    if _automation_already_sent(db, rule_key, q["id"]) or not q["customer_email"]:
+                        continue
+                    try:
+                        pdf_bytes = generate_quote_pdf_bytes(q["id"], db)
+                        subject = f"Erinnerung: Angebot {q['number']}"
+                        body = (f"Guten Tag {q['customer_name']},\n\n"
+                                f"wir wollten kurz nachfragen, ob Sie sich bereits zu unserem Angebot {q['number']} "
+                                f"entscheiden konnten. Bei Fragen melden Sie sich gerne bei uns.\n\n"
+                                f"Das Angebot finden Sie zu Ihrer Information nochmal anbei.\n\n"
+                                f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Systemhaus24')}")
+                        _smtp_send_pdf(cfg, q["customer_email"], subject, body, pdf_bytes, f"Angebot_{q['number']}.pdf")
+                        _automation_mark_sent(db, rule_key, q["id"])
+                        db.commit()
+                        print(f"[AUTOMATION] Angebot-Nachfassen für {q['number']} an {q['customer_email']} gesendet")
+                    except Exception as e:
+                        print(f"[AUTOMATION] Angebot-Nachfassen fehlgeschlagen für {q['number']}: {e}")
+
+            # 3) Lead-Inaktivität: Leads ohne Aktivität seit X Tagen -> Erinnerungsmail an Admin
+            if cfg.get("automation_lead_stale_enabled") == "1" and admin_email:
+                days = int(cfg.get("automation_lead_stale_days", 14) or 14)
+                cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+                stale = db.execute("""
+                    SELECT * FROM leads
+                    WHERE stage NOT IN ('won','lost') AND updated_at < %s
+                """, (cutoff,)).fetchall()
+                for lead in stale:
+                    rule_key = "lead_stale"
+                    if _automation_already_sent(db, rule_key, lead["id"]):
+                        continue
+                    try:
+                        subject = f"[Erinnerung] Lead \"{lead['company'] or lead['contact_name']}\" seit {days} Tagen inaktiv"
+                        body = (f"Der Lead \"{lead['company'] or lead['contact_name']}\" (Stufe: {lead['stage']}) "
+                                f"hatte seit {days} Tagen keine Aktivität. Bitte nachfassen oder Status aktualisieren.")
+                        send_smtp_email(admin_email, subject, body, cfg)
+                        _automation_mark_sent(db, rule_key, lead["id"])
+                        db.commit()
+                        print(f"[AUTOMATION] Lead-Erinnerung für #{lead['id']} gesendet")
+                    except Exception as e:
+                        print(f"[AUTOMATION] Lead-Erinnerung fehlgeschlagen für #{lead['id']}: {e}")
+
+            db.close()
+        except Exception as e:
+            print(f"[AUTOMATION] Fehler: {e}")
+        time.sleep(3 * 3600)  # prüfe alle 3 Stunden
 
 
 def check_recurring_invoices():
@@ -3442,6 +4325,7 @@ def recurring_new():
     interval     = request.form.get("interval", "monthly")
     start_date   = request.form.get("start_date", date.today().isoformat())
     notes        = request.form.get("notes", "").strip()
+    auto_send    = 1 if request.form.get("auto_send") else 0
     descriptions = request.form.getlist("item_desc")
     quantities   = request.form.getlist("item_qty")
     prices       = request.form.getlist("item_price")
@@ -3452,8 +4336,8 @@ def recurring_new():
 
     db = get_db()
     rid = db.execute(
-        "INSERT INTO recurring_invoices (customer_id, name, interval, day_of_month, next_date, notes) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
-        (customer_id, name, interval, int(start_date.split("-")[2]), start_date, notes)
+        "INSERT INTO recurring_invoices (customer_id, name, interval, day_of_month, next_date, notes, auto_send) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        (customer_id, name, interval, int(start_date.split("-")[2]), start_date, notes, auto_send)
     ).fetchone()["id"]
     for desc, qty, price in zip(descriptions, quantities, prices):
         desc = desc.strip()
@@ -4161,6 +5045,12 @@ def _startup():
     t2 = threading.Thread(target=check_recurring_invoices, daemon=True)
     t2.start()
     print("[RECURRING] Hintergrund-Job gestartet (stündliche Prüfung)")
+    t3 = threading.Thread(target=check_payment_reminders, daemon=True)
+    t3.start()
+    print("[REMINDER] Hintergrund-Job gestartet (Prüfung alle 6h)")
+    t4 = threading.Thread(target=check_automation_rules, daemon=True)
+    t4.start()
+    print("[AUTOMATION] Hintergrund-Job gestartet (Prüfung alle 3h)")
 
 _startup()
 

@@ -27,3 +27,8 @@ Thumbs.db
 # Temporäre Claude-Dateien
 .claude/
 UsersSYSEXP~1AppDataLocalTemppylibs/
+
+# Backups / Migration (Daten, nicht in Git)
+backups/
+itool/migrate_db.sql
+*.tar.gz

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_flow_steps.html" import flow_steps %}
 {% block title %}Rechnung {{ invoice.number }}{% endblock %}
 {% block content %}
 
@@ -39,6 +40,15 @@
     Per E-Mail senden
   </button>
 </div>
+
+{% if source_quote %}
+<div class="no-print">
+  {{ flow_steps(source_quote, invoice) }}
+  <p class="text-xs text-gray-400 -mt-2 mb-4">Erstellt aus
+    <a href="{{ url_for('quote_view', qid=source_quote.id) }}" class="text-[#1c3461] hover:underline font-medium">Angebot {{ source_quote.number }}</a>
+  </p>
+</div>
+{% endif %}
 
 <!-- Invoice document -->
 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 print-doc" id="invoice-doc">

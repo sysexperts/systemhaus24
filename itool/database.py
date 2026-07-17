@@ -374,6 +374,15 @@ def init_db():
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS remote_devices (
+            id SERIAL PRIMARY KEY,
+            customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+            device_name TEXT NOT NULL,
+            rustdesk_id TEXT NOT NULL,
+            rustdesk_password TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
         """CREATE TABLE IF NOT EXISTS notifications (
             id SERIAL PRIMARY KEY,
             type TEXT NOT NULL,
@@ -435,6 +444,13 @@ def init_db():
             sent_by TEXT,
             sent_via TEXT DEFAULT 'manual'
         )""",
+        """CREATE TABLE IF NOT EXISTS automation_log (
+            id SERIAL PRIMARY KEY,
+            rule_key TEXT NOT NULL,
+            entity_id INTEGER NOT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(rule_key, entity_id)
+        )""",
     ]
 
     for sql in stmts:
@@ -443,6 +459,42 @@ def init_db():
     conn.commit()
 
     _safe_alter(conn, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)")
+    _safe_alter(conn, "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS reminder_sent_at TEXT")
+    _safe_alter(conn, "ALTER TABLE recurring_invoices ADD COLUMN IF NOT EXISTS auto_send INTEGER DEFAULT 0")
+    _safe_alter(conn, "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS pinned INTEGER DEFAULT 0")
+    _safe_alter(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT")
+    _safe_alter(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled INTEGER DEFAULT 0")
+    _safe_alter(conn, "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT")
+    conn.execute("""CREATE TABLE IF NOT EXISTS trusted_devices (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL,
+        label TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+    )""")
+    conn.commit()
+    conn.execute("""CREATE TABLE IF NOT EXISTS notification_pins (
+        notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        pinned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (notification_id, user_id)
+    )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS text_templates (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'ticket',
+        subject TEXT,
+        body TEXT NOT NULL,
+        created_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS ticket_timers (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    conn.commit()
 
 
 
