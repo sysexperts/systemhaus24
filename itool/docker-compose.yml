@@ -8,6 +8,12 @@ services:
     volumes:
       - dbdata:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-itool} -d ${DB_NAME:-itool}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   itool:
     build: .
@@ -24,7 +30,8 @@ services:
       DB_USER: ${DB_USER:-itool}
       DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
     dns:
       - 8.8.8.8
