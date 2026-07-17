@@ -70,7 +70,7 @@ def decrypt_secret(ciphertext: str) -> str:
 
 # ── RustDesk online status (queries hbbs directly via its rendezvous protocol) ──
 
-RUSTDESK_HBBS_HOST = "rustdesk.systemhaus24.net"
+RUSTDESK_HBBS_HOST = "remote.vasys-it.de"
 RUSTDESK_HBBS_PORT = 21115  # nat-test port; also handles OnlineRequest
 
 def _rd_varint(n):
