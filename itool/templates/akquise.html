@@ -52,6 +52,10 @@
 <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
   <div class="flex items-center gap-1 flex-wrap" id="stageFilter">
     <button data-stage="" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1c3461] text-white">Alle <span class="opacity-60">{{ kpi.total }}</span></button>
+    {% set ready_count = leads|selectattr('stage','equalto','new')|selectattr('contact_phone')|list|length %}
+    <button data-stage="__ready__" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300">
+      Bereit zum Kontaktieren <span class="text-gray-400">{{ ready_count }}</span>
+    </button>
     {% for stage_key, stage_label, stage_cls in stages %}
     <button data-stage="{{ stage_key }}" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300">
       {{ stage_label }} <span class="text-gray-400">{{ by_stage[stage_key]|length }}</span>
@@ -83,6 +87,7 @@
         <th class="px-3 py-2.5 text-left text-[11px] text-gray-400 uppercase tracking-wide font-medium">Phase</th>
         <th class="px-3 py-2.5 text-left text-[11px] text-gray-400 uppercase tracking-wide font-medium">Quelle</th>
         <th class="px-3 py-2.5 text-left text-[11px] text-gray-400 uppercase tracking-wide font-medium">Telefon</th>
+        <th class="px-3 py-2.5 text-left text-[11px] text-gray-400 uppercase tracking-wide font-medium">Zuständiger</th>
         <th class="px-3 py-2.5 text-left text-[11px] text-gray-400 uppercase tracking-wide font-medium">Wiedervorlage</th>
         <th class="px-3 py-2.5 text-right text-[11px] text-gray-400 uppercase tracking-wide font-medium">Wert</th>
         <th class="px-3 py-2.5 text-right text-[11px] text-gray-400 uppercase tracking-wide font-medium"></th>
@@ -99,6 +104,7 @@
     <tr class="lead-row border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors cursor-pointer"
         data-name="{{ l.contact_name|lower }} {{ (l.company or '')|lower }} {{ (l.contact_phone or '') }}"
         data-stage="{{ l.stage }}" data-source="{{ l.source or 'Sonstiges' }}" data-fu="{{ fu_state }}"
+        data-hasphone="{{ '1' if l.contact_phone else '0' }}"
         onclick="if(!event.target.closest('.no-nav')) window.location='{{ url_for('akquise_detail', lid=l.id) }}'">
 
       <!-- Temperatur -->
@@ -138,6 +144,15 @@
       <!-- Telefon -->
       <td class="px-3 py-2.5">
         <span class="text-xs text-gray-500 tabular-nums">{{ l.contact_phone or '–' }}</span>
+      </td>
+
+      <!-- Zuständiger -->
+      <td class="px-3 py-2.5">
+        {% if l.assigned_to %}
+          <span class="text-xs text-gray-600">{{ l.assigned_to }}</span>
+        {% else %}
+          <span class="text-xs text-gray-300">–</span>
+        {% endif %}
       </td>
 
       <!-- Wiedervorlage -->
@@ -267,7 +282,9 @@ function applyFilters() {
   let visible = 0;
   document.querySelectorAll('.lead-row').forEach(row => {
     const okText   = !q || (row.dataset.name || '').includes(q);
-    const okStage  = !fStage || row.dataset.stage === fStage;
+    const okStage  = !fStage
+      || (fStage === '__ready__' ? (row.dataset.stage === 'new' && row.dataset.hasphone === '1')
+                                 : row.dataset.stage === fStage);
     const okSource = !fSource || row.dataset.source === fSource;
     const okDue    = !fDue || row.dataset.fu === 'overdue' || row.dataset.fu === 'today';
     const show = okText && okStage && okSource && okDue;

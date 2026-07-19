@@ -5073,9 +5073,10 @@ def akquise_stage(lid):
     if new_stage not in STAGE_KEYS:
         abort(400)
     lost_reason = request.form.get("lost_reason", "").strip()
+    who = session.get("display_name") or session.get("username")
     db = get_db()
-    db.execute("UPDATE leads SET stage=%s, lost_reason=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-               (new_stage, lost_reason if new_stage == "lost" else None, lid))
+    db.execute("UPDATE leads SET stage=%s, lost_reason=%s, assigned_to=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+               (new_stage, lost_reason if new_stage == "lost" else None, who, lid))
     # Auto-activity log
     labels = {s[0]: s[1] for s in LEAD_STAGES}
     db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
@@ -5093,11 +5094,12 @@ def akquise_activity(lid):
     followup = request.form.get("next_followup") or None
     if not body:
         return redirect(url_for("akquise_detail", lid=lid))
+    who = session.get("display_name") or session.get("username")
     db = get_db()
     db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
                (lid, atype, body, session["username"]))
-    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=%s WHERE id=%s",
-               (followup, lid))
+    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=%s, assigned_to=%s WHERE id=%s",
+               (followup, who, lid))
     db.commit()
     db.close()
     return redirect(url_for("akquise_detail", lid=lid))
@@ -5106,10 +5108,11 @@ def akquise_activity(lid):
 @app.route("/akquise/<int:lid>/edit", methods=["POST"])
 @login_required
 def akquise_edit(lid):
+    who = session.get("display_name") or session.get("username")
     db = get_db()
     db.execute("""UPDATE leads SET company=%s, contact_name=%s, contact_email=%s,
                   contact_phone=%s, source=%s, deal_value=%s, notes=%s, next_followup=%s, link=%s,
-                  updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (
+                  assigned_to=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (
         request.form.get("company", "").strip(),
         request.form.get("contact_name", "").strip(),
         request.form.get("contact_email", "").strip(),
@@ -5119,6 +5122,7 @@ def akquise_edit(lid):
         request.form.get("notes", "").strip(),
         request.form.get("next_followup") or None,
         request.form.get("link", "").strip() or None,
+        who,
         lid,
     ))
     db.commit()
