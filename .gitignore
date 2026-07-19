@@ -32,3 +32,7 @@ UsersSYSEXP~1AppDataLocalTemppylibs/
 backups/
 itool/migrate_db.sql
 *.tar.gz
+
+# Backups von Editoren
+*.bak
+*.bak-*

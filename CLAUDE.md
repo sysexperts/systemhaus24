@@ -1,10 +1,10 @@
 # Systemhaus24 – itool
 
 Internes CRM/ERP-Tool ("itool") für Systemhaus24, ein IT-Dienstleister. Flask + PostgreSQL + Docker,
-live unter https://tool.vasys-it.de (aktiver Server, seit 2026-07-17). Alle UI-Texte sind auf Deutsch.
+live unter https://tools.vapur-it.de (aktiver Server, seit 2026-07-17). Alle UI-Texte sind auf Deutsch.
 
 > Server-Migration: Bis 2026-07-17 lief das Tool auf `31.70.108.144` (https://tools.systemhaus24.net).
-> Seither ist der aktive Server **`185.248.140.225`** (Domain `tool.vasys-it.de`). Der alte Server läuft
+> Seither ist der aktive Server **`185.248.140.225`** (Domain `tools.vapur-it.de`). Der alte Server läuft
 > noch, ist aber nicht mehr das Deploy-Ziel. Die RustDesk-Fernwartung (hbbs/hbbr) bleibt auf dem alten
 > Server (`rustdesk.systemhaus24.net`) – der "Aufschalten"-Button/Online-Status zeigt weiterhin dorthin.
 

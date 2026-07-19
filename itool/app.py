@@ -70,7 +70,7 @@ def decrypt_secret(ciphertext: str) -> str:
 
 # ── RustDesk online status (queries hbbs directly via its rendezvous protocol) ──
 
-RUSTDESK_HBBS_HOST = "remote.vasys-it.de"
+RUSTDESK_HBBS_HOST = "remote.vapur-it.de"
 RUSTDESK_HBBS_PORT = 21115  # nat-test port; also handles OnlineRequest
 
 def _rd_varint(n):
@@ -1228,6 +1228,50 @@ def generate_invoice_pdf_bytes(iid, db):
     return buf.getvalue()
 
 
+# ----------------------------------------------- GoBD: Original-PDF-Archiv (write-once)
+#  Beim Finalisieren/Versenden wird das Dokument EINMALIG unveraenderbar als PDF abgelegt.
+#  Wird von backup.sh mitgesichert (liegt unter data/belege/...).
+_DOC_ARCHIVE_BASE = os.path.join(os.path.dirname(__file__), "data", "belege")
+
+def _archive_pdf_once(subdir, name, gen_fn):
+    try:
+        d = os.path.join(_DOC_ARCHIVE_BASE, subdir)
+        os.makedirs(d, exist_ok=True)
+        safe = "".join(c for c in str(name) if c.isalnum() or c in "-_.") or "dokument"
+        path = os.path.join(d, safe + ".pdf")
+        if os.path.exists(path):
+            return  # write-once: Original bleibt unveraendert
+        pdf = gen_fn()
+        tmp = path + ".part"
+        with open(tmp, "wb") as f:
+            f.write(pdf)
+        os.replace(tmp, path)
+        try: os.chmod(path, 0o444)
+        except Exception: pass
+    except Exception as e:
+        try: app.logger.warning(f"PDF-Archiv fehlgeschlagen ({subdir}/{name}): {e}")
+        except Exception: pass
+
+def archive_invoice_pdf(iid, db):
+    row = db.execute("SELECT number, status FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not row or row["status"] == "draft":
+        return
+    _archive_pdf_once("rechnungen", f"Rechnung_{row['number']}", lambda: generate_invoice_pdf_bytes(iid, db))
+
+def archive_quote_pdf(qid, db):
+    row = db.execute("SELECT number, status FROM quotes WHERE id=%s", (qid,)).fetchone()
+    if not row or row["status"] == "draft":
+        return
+    _archive_pdf_once("angebote", f"Angebot_{row['number']}", lambda: generate_quote_pdf_bytes(qid, db))
+
+def archive_dunning_pdf(iid, level, db):
+    row = db.execute("SELECT number FROM invoices WHERE id=%s", (iid,)).fetchone()
+    if not row:
+        return
+    lvl = {1: "Zahlungserinnerung", 2: "1_Mahnung", 3: "2_Mahnung"}.get(level, f"Mahnung{level}")
+    _archive_pdf_once("mahnungen", f"{lvl}_{row['number']}", lambda: generate_dunning_pdf_bytes(iid, level, db))
+
+
 @app.route("/invoices/<int:iid>/pdf")
 @login_required
 def invoice_pdf(iid):
@@ -1238,6 +1282,7 @@ def invoice_pdf(iid):
         abort(404)
     try:
         pdf = generate_invoice_pdf_bytes(iid, db)
+        archive_invoice_pdf(iid, db)
     finally:
         db.close()
     from flask import Response
@@ -1299,6 +1344,7 @@ def invoice_send_email(iid):
             db.execute("UPDATE invoices SET status='sent' WHERE id=%s", (iid,))
         _calc_commission_for_invoice(db, iid)
         db.commit()
+        archive_invoice_pdf(iid, db)
         flash(f"Rechnung als PDF an {to_addr} gesendet ✓", "success")
     except Exception as e:
         flash(f"E-Mail-Fehler: {e}", "error")
@@ -1455,6 +1501,7 @@ def dunning_send(iid, level):
                    (iid, level, ctx["fee"], ctx["deadline"], session["username"], via))
         log_activity(db, "erstellt", "Mahnung", iid, invoice["number"], f"{title}" + (f" per E-Mail an {to_addr}" if via == "email" else ""))
         db.commit()
+        archive_dunning_pdf(iid, level, db)
         if via == "email":
             flash(f"{title} per E-Mail an {to_addr} gesendet ✓", "success")
         else:
@@ -1612,6 +1659,7 @@ def quote_send_email(qid):
             db.execute("UPDATE quotes SET status='sent' WHERE id=%s", (qid,))
         log_activity(db, "versendet", "Angebot", qid, quote["number"], f"per E-Mail an {to_addr}")
         db.commit()
+        archive_quote_pdf(qid, db)
         flash(f"Angebot als PDF an {to_addr} gesendet ✓", "success")
     except Exception as e:
         flash(f"E-Mail-Fehler: {e}", "error")
@@ -1709,6 +1757,7 @@ def invoice_status(iid, status):
         _calc_commission_for_invoice(db, iid)
     log_activity(db, "Status geändert", "Rechnung", iid, current["number"], f"neuer Status: {status}")
     db.commit()
+    archive_invoice_pdf(iid, db)
     db.close()
     return redirect(url_for("invoice_view", iid=iid))
 
@@ -2655,7 +2704,7 @@ def api_leadgen_report():
             f"die automatische Umkreis-Akquise hat heute {today_cnt} neue Leads gefunden "
             f"({with_phone} davon mit Telefonnummer).\n\n"
             f"Offene Leads in der Pipeline insgesamt: {open_cnt}\n\n"
-            f"Zur Akquise: https://tool.vasys-it.de/akquise\n\n"
+            f"Zur Akquise: https://tools.vapur-it.de/akquise\n\n"
             f"— Automatischer Report"
         )
         try:
@@ -4197,6 +4246,7 @@ def _create_invoice_from_recurring(db, rec):
                 db.execute("INSERT INTO invoice_emails (invoice_id, to_addr, subject, sent_by) VALUES (%s,%s,%s,%s)",
                            (inv_id, customer["email"], subject, "automatisch"))
                 db.execute("UPDATE invoices SET status='sent' WHERE id=%s", (inv_id,))
+                archive_invoice_pdf(inv_id, db)
                 print(f"[RECURRING] Rechnung {num} automatisch an {customer['email']} gesendet")
             except Exception as e:
                 print(f"[RECURRING] Auto-Versand fehlgeschlagen für Rechnung {num}: {e}")
