@@ -4954,7 +4954,11 @@ def akquise_new():
 @login_required
 def akquise_detail(lid):
     db = get_db()
-    lead = db.execute("SELECT * FROM leads WHERE id=%s", (lid,)).fetchone()
+    lead = db.execute("""
+        SELECT l.*,
+               (SELECT created_at FROM lead_activities WHERE lead_id=l.id ORDER BY created_at DESC LIMIT 1) as last_activity_at
+        FROM leads l WHERE l.id=%s
+    """, (lid,)).fetchone()
     if not lead:
         db.close()
         flash("Lead nicht gefunden.", "error")
@@ -4964,7 +4968,10 @@ def akquise_detail(lid):
     ).fetchall()
     db.close()
     lead_d = dict(lead)
-    lead_d["score"] = _score_lead(lead, date.today())
+    try:
+        lead_d["score"] = _score_lead(lead, date.today())
+    except Exception:
+        lead_d["score"] = 0
     return render_template("akquise_detail.html", lead=lead_d, activities=activities,
                            stages=LEAD_STAGES, sources=LEAD_SOURCES, today=date.today().isoformat())
 
