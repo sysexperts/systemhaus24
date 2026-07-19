@@ -4963,7 +4963,9 @@ def akquise_detail(lid):
         "SELECT * FROM lead_activities WHERE lead_id=%s ORDER BY created_at DESC", (lid,)
     ).fetchall()
     db.close()
-    return render_template("akquise_detail.html", lead=lead, activities=activities,
+    lead_d = dict(lead)
+    lead_d["score"] = _score_lead(lead, date.today())
+    return render_template("akquise_detail.html", lead=lead_d, activities=activities,
                            stages=LEAD_STAGES, sources=LEAD_SOURCES, today=date.today().isoformat())
 
 
