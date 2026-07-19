@@ -162,6 +162,14 @@
                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
         </div>
         <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs text-gray-400">Link (Standort / Website)</label>
+            {% if lead.link %}<a href="{{ lead.link }}" target="_blank" rel="noopener" class="text-xs text-[#1c3461] font-medium hover:underline">öffnen ↗</a>{% endif %}
+          </div>
+          <input type="text" name="link" value="{{ lead.link or '' }}" placeholder="https://…"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
+        </div>
+        <div>
           <label class="block text-xs text-gray-400 mb-1">Quelle</label>
           <select name="source" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1c3461]/30">
             {% for s in sources %}

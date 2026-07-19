@@ -2605,6 +2605,7 @@ def api_create_lead():
     contact_phone = (data.get("contact_phone") or "").strip()
     source        = (data.get("source") or "Automatische Akquise").strip()
     notes         = (data.get("notes") or "").strip()
+    link          = (data.get("link") or "").strip() or None
     external_ref  = (data.get("external_ref") or "").strip() or None
     if not company and not contact_email and not contact_phone:
         return jsonify(status="error", message="Mindestens company oder Kontaktdaten erforderlich"), 400
@@ -2616,9 +2617,9 @@ def api_create_lead():
             db.close()
             return jsonify(status="duplicate", id=existing["id"])
     row = db.execute(
-        """INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes, external_ref)
-           VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-        (company or None, contact_name, contact_email or None, contact_phone or None, source, notes or None, external_ref)
+        """INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes, link, external_ref)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        (company or None, contact_name, contact_email or None, contact_phone or None, source, notes or None, link, external_ref)
     ).fetchone()
     db.commit()
     db.close()
@@ -5008,7 +5009,7 @@ def akquise_activity(lid):
 def akquise_edit(lid):
     db = get_db()
     db.execute("""UPDATE leads SET company=%s, contact_name=%s, contact_email=%s,
-                  contact_phone=%s, source=%s, deal_value=%s, notes=%s, next_followup=%s,
+                  contact_phone=%s, source=%s, deal_value=%s, notes=%s, next_followup=%s, link=%s,
                   updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (
         request.form.get("company", "").strip(),
         request.form.get("contact_name", "").strip(),
@@ -5018,6 +5019,7 @@ def akquise_edit(lid):
         float(request.form.get("deal_value") or 0),
         request.form.get("notes", "").strip(),
         request.form.get("next_followup") or None,
+        request.form.get("link", "").strip() or None,
         lid,
     ))
     db.commit()
