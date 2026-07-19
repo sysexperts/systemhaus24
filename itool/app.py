@@ -2626,6 +2626,46 @@ def api_create_lead():
     return jsonify(status="created", id=row["id"])
 
 
+@app.route("/api/leadgen-report", methods=["POST"])
+def api_leadgen_report():
+    """Token-geschützt: zählt die heute automatisch gefundenen Leads und schickt
+    eine Zusammenfassungs-Mail (via itool-SMTP). Wird von n8n am Ende des Laufs aufgerufen."""
+    expected = os.environ.get("LEADGEN_API_TOKEN", "")
+    provided = request.headers.get("X-API-Token", "")
+    if not expected or not hmac.compare_digest(provided, expected):
+        abort(401)
+    db = get_db()
+    cfg = get_settings(db)
+    today_cnt = db.execute(
+        "SELECT COUNT(*) FROM leads WHERE source='Umkreis-Akquise (OSM)' AND created_at::date = CURRENT_DATE"
+    ).fetchone()[0]
+    open_cnt = db.execute(
+        "SELECT COUNT(*) FROM leads WHERE source='Umkreis-Akquise (OSM)' AND stage NOT IN ('won','lost')"
+    ).fetchone()[0]
+    with_phone = db.execute(
+        "SELECT COUNT(*) FROM leads WHERE source='Umkreis-Akquise (OSM)' AND created_at::date = CURRENT_DATE AND contact_phone IS NOT NULL AND contact_phone <> ''"
+    ).fetchone()[0]
+    db.close()
+    recipient = (cfg.get("error_notify_email") or cfg.get("company_email") or cfg.get("smtp_from_email") or "").strip()
+    sent = False
+    if recipient and cfg.get("smtp_host"):
+        subject = f"Akquise: {today_cnt} neue Leads heute"
+        body = (
+            f"Guten Morgen,\n\n"
+            f"die automatische Umkreis-Akquise hat heute {today_cnt} neue Leads gefunden "
+            f"({with_phone} davon mit Telefonnummer).\n\n"
+            f"Offene Leads in der Pipeline insgesamt: {open_cnt}\n\n"
+            f"Zur Akquise: https://tool.vasys-it.de/akquise\n\n"
+            f"— Automatischer Report"
+        )
+        try:
+            send_smtp_email(recipient, subject, body, cfg)
+            sent = True
+        except Exception as e:
+            print(f"[LEADGEN] Report-Mail Fehler: {e}")
+    return jsonify(ok=True, today=today_cnt, open=open_cnt, mail_sent=sent, recipient=recipient)
+
+
 @app.route("/api/users")
 @login_required
 def api_users():
