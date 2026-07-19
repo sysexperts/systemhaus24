@@ -2589,6 +2589,42 @@ def api_notifications_history():
     return jsonify(result)
 
 
+@app.route("/api/leads", methods=["POST"])
+def api_create_lead():
+    """Token-geschützter Endpunkt zum automatischen Anlegen von Leads (z.B. aus n8n/OSM).
+    Auth per Header 'X-API-Token' gegen LEADGEN_API_TOKEN aus der .env.
+    Dedupe über 'external_ref' (z.B. OSM-Objekt-ID) — doppelte werden übersprungen."""
+    expected = os.environ.get("LEADGEN_API_TOKEN", "")
+    provided = request.headers.get("X-API-Token", "")
+    if not expected or not hmac.compare_digest(provided, expected):
+        abort(401)
+    data = request.get_json(silent=True) or {}
+    company       = (data.get("company") or "").strip()
+    contact_name  = (data.get("contact_name") or "").strip() or company or "Ansprechpartner unbekannt"
+    contact_email = (data.get("contact_email") or "").strip()
+    contact_phone = (data.get("contact_phone") or "").strip()
+    source        = (data.get("source") or "Automatische Akquise").strip()
+    notes         = (data.get("notes") or "").strip()
+    external_ref  = (data.get("external_ref") or "").strip() or None
+    if not company and not contact_email and not contact_phone:
+        return jsonify(status="error", message="Mindestens company oder Kontaktdaten erforderlich"), 400
+
+    db = get_db()
+    if external_ref:
+        existing = db.execute("SELECT id FROM leads WHERE external_ref=%s", (external_ref,)).fetchone()
+        if existing:
+            db.close()
+            return jsonify(status="duplicate", id=existing["id"])
+    row = db.execute(
+        """INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes, external_ref)
+           VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        (company or None, contact_name, contact_email or None, contact_phone or None, source, notes or None, external_ref)
+    ).fetchone()
+    db.commit()
+    db.close()
+    return jsonify(status="created", id=row["id"])
+
+
 @app.route("/api/users")
 @login_required
 def api_users():

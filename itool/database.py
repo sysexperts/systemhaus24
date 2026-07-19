@@ -496,6 +496,11 @@ def init_db():
     )""")
     conn.commit()
 
+    # Externe Referenz für automatisch generierte Leads (Dedupe, z.B. OSM-Objekt-ID)
+    _safe_alter(conn, "ALTER TABLE leads ADD COLUMN IF NOT EXISTS external_ref TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_external_ref ON leads(external_ref) WHERE external_ref IS NOT NULL")
+    conn.commit()
+
 
 
 
