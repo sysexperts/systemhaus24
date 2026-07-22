@@ -51,16 +51,12 @@
 <!-- Filter-Leiste -->
 <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
   <div class="flex items-center gap-1 flex-wrap" id="stageFilter">
-    <button data-stage="" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1c3461] text-white">Alle <span class="opacity-60">{{ kpi.total }}</span></button>
-    {% set ready_count = leads|selectattr('stage','equalto','new')|selectattr('contact_phone')|list|length %}
-    <button data-stage="__ready__" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300">
-      Bereit zum Kontaktieren <span class="text-gray-400">{{ ready_count }}</span>
-    </button>
     {% for stage_key, stage_label, stage_cls in stages %}
     <button data-stage="{{ stage_key }}" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300">
       {{ stage_label }} <span class="text-gray-400">{{ by_stage[stage_key]|length }}</span>
     </button>
     {% endfor %}
+    <button data-stage="" class="stage-pill px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300">Alle <span class="text-gray-400">{{ kpi.total }}</span></button>
   </div>
   <div class="flex items-center gap-2">
     {% if overdue or due_today %}
@@ -328,5 +324,13 @@ function changeStage(id, stage, sel) {
     .then(() => window.location.reload())
     .catch(() => window.location.reload());
 }
+
+// Standard-Filter beim Öffnen (und beim Zurückkehren von der Detailseite): "Neu" automatisch wählen
+function selectNeuFilter(){
+  const p = document.querySelector('.stage-pill[data-stage="new"]');
+  if (p) p.click();
+}
+selectNeuFilter();
+window.addEventListener('pageshow', selectNeuFilter);
 </script>
 {% endblock %}

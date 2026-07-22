@@ -1,0 +1,9 @@
+tailwindcss
+tw-input.css
+tailwind.config.js
+*.bak
+*.bak-*
+Dockerfile.bak-*
+app.py.bak*
+database.py.bak*
+**/__pycache__

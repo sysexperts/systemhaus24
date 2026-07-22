@@ -240,7 +240,7 @@ def handle_500(e):
         if notify and cfg.get("smtp_host", "").strip():
             send_smtp_email(
                 notify,
-                f"[Systemhaus24] Fehler: {request.path}",
+                f"[Vapur-IT] Fehler: {request.path}",
                 f"Zeitpunkt: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
                 f"Request: {req_info}\n\n{tb}",
                 cfg,
@@ -310,12 +310,14 @@ def inject_globals():
     payout_count = db2.execute(
         "SELECT COUNT(*) FROM promoter_payouts WHERE status='pending'"
     ).fetchone()[0]
+    lead_count = db2.execute("SELECT COUNT(*) FROM leads WHERE stage='new'").fetchone()[0]
     db2.close()
     current_user_avatar = urow["avatar"] if urow and urow["avatar"] else None
     return {'feed_messages': messages, 'ticket_count': ticket_count,
             'invoice_count': invoice_count, 'app_cfg': app_cfg,
             'current_user_avatar': current_user_avatar,
-            'payout_count': payout_count, 'is_kg': is_kg, 'brutto': brutto}
+            'payout_count': payout_count, 'lead_count': lead_count,
+            'is_kg': is_kg, 'brutto': brutto}
 
 
 def login_required(f):
@@ -341,6 +343,7 @@ PROMOTER_MODULES = {
     "support":    ("Fernwartung",    lambda ep: "support" in ep),
     "articles":   ("Leistungen",     lambda ep: "article" in ep),
     "akquise":    ("Akquise",        lambda ep: "akquise" in ep or ep.startswith("lead")),
+    "klassifizierung": ("Klassifizierung", lambda ep: "klassifizierung" in ep),
     "accounting": ("Buchhaltung",    lambda ep: "accounting" in ep or "time_report" in ep or "expense" in ep),
     "contracts":  ("Verträge",       lambda ep: "contract" in ep),
 }
@@ -417,8 +420,9 @@ def _calc_commission_for_invoice(db, invoice_id):
             (a["id"], invoice_id)).fetchone()
         if exists:
             continue
+        # Nur provisionsrelevante Positionen (Material/Versand koennen abgewaehlt sein); NULL = relevant (Altdaten)
         total = db.execute(
-            "SELECT COALESCE(SUM(quantity*unit_price),0) as t FROM invoice_items WHERE invoice_id=%s",
+            "SELECT COALESCE(SUM(quantity*unit_price),0) as t FROM invoice_items WHERE invoice_id=%s AND commission_relevant IS NOT FALSE",
             (invoice_id,)).fetchone()["t"]
         commission = round(total * a["commission_pct"] / 100, 2)
         db.execute("""
@@ -1074,7 +1078,7 @@ def support_device_password(cid, did):
 @app.route("/support/download")
 def support_download():
     downloads_dir = os.path.join(app.root_path, "data", "downloads")
-    return send_from_directory(downloads_dir, "SystemHaus24-RustDesk-Setup.zip", as_attachment=True)
+    return send_from_directory(downloads_dir, "Vapur-IT-RustDesk-Setup.zip", as_attachment=True)
 
 
 @app.route("/customers/<int:cid>/status", methods=["POST"])
@@ -1139,6 +1143,15 @@ def customer_delete(cid):
         db.execute("DELETE FROM invoices WHERE id=ANY(%s)", (draft_ids,))
     db.execute("UPDATE tickets SET customer_id=NULL WHERE customer_id=%s", (cid,))
     db.execute("DELETE FROM outreach WHERE customer_id=%s", (cid,))
+    # Weitere abhaengige Datensaetze entfernen, sonst Foreign-Key-Verletzung (500).
+    # quote_items / recurring_invoice_items / contract_emails haengen per ON DELETE CASCADE.
+    db.execute("DELETE FROM quotes WHERE customer_id=%s", (cid,))
+    db.execute("DELETE FROM recurring_invoices WHERE customer_id=%s", (cid,))
+    db.execute("DELETE FROM contracts WHERE customer_id=%s", (cid,))
+    db.execute("""DELETE FROM promoter_commissions WHERE assignment_id IN
+                  (SELECT id FROM promoter_assignments WHERE customer_id=%s)""", (cid,))
+    db.execute("DELETE FROM promoter_assignments WHERE customer_id=%s", (cid,))
+    # customer_contacts und remote_devices werden per ON DELETE CASCADE mitentfernt.
     db.execute("DELETE FROM customers WHERE id=%s", (cid,))
     log_activity(db, "gelöscht", "Kunde", cid, cust["name"] if cust else None)
     db.commit()
@@ -1176,10 +1189,12 @@ def invoice_new():
         descs = request.form.getlist("desc[]")
         qtys = request.form.getlist("qty[]")
         prices = request.form.getlist("price[]")
-        for desc, qty, price in zip(descs, qtys, prices):
+        comms = request.form.getlist("commission[]")
+        for i, (desc, qty, price) in enumerate(zip(descs, qtys, prices)):
             if desc.strip():
-                db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price) VALUES (%s,%s,%s,%s)",
-                           (inv_id, desc, float(qty), float(price)))
+                crel = (comms[i] if i < len(comms) else "1") != "0"
+                db.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, commission_relevant) VALUES (%s,%s,%s,%s,%s)",
+                           (inv_id, desc, float(qty), float(price), crel))
         log_activity(db, "erstellt", "Rechnung", inv_id, number)
         db.commit()
         db.close()
@@ -1188,9 +1203,20 @@ def invoice_new():
     customers = db.execute("SELECT * FROM customers ORDER BY name").fetchall()
     articles  = db.execute("SELECT * FROM articles WHERE active=1 ORDER BY category, name").fetchall()
     cfg = get_settings(db)
+    # Kunden mit aktivem Promoter -> fuer Provisions-Hinweis im Formular
+    promoter_customers = {}
+    for row in db.execute("""
+        SELECT pa.customer_id, u.display_name, u.username, pa.commission_pct
+        FROM promoter_assignments pa JOIN users u ON u.id = pa.promoter_id
+        WHERE pa.end_date IS NULL OR pa.end_date >= %s
+    """, (date.today().isoformat(),)).fetchall():
+        promoter_customers[str(row["customer_id"])] = {
+            "name": row["display_name"] or row["username"],
+            "pct": row["commission_pct"],
+        }
     db.close()
     return render_template("invoice_form.html", invoice=None, customers=customers,
-                           articles=articles, cfg=cfg,
+                           articles=articles, cfg=cfg, promoter_customers=promoter_customers,
                            today=date.today().isoformat(), number=next_invoice_number())
 
 
@@ -1313,7 +1339,7 @@ def invoice_send_email(iid):
         port       = int(cfg.get("smtp_port", 587) or 587)
         user       = cfg.get("smtp_user", "").strip()
         pw         = cfg.get("smtp_pass", "")
-        from_name  = cfg.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
+        from_name  = cfg.get("smtp_from_name", "Vapur-IT").strip() or "Vapur-IT"
         from_email = (cfg.get("smtp_from_email", "") or user).strip()
         if not host:
             raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -1367,7 +1393,7 @@ def _smtp_send_pdf(cfg, to_addr, subject, body, pdf_bytes, pdf_name):
     port       = int(cfg.get("smtp_port", 587) or 587)
     user       = cfg.get("smtp_user", "").strip()
     pw         = cfg.get("smtp_pass", "")
-    from_name  = cfg.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
+    from_name  = cfg.get("smtp_from_name", "Vapur-IT").strip() or "Vapur-IT"
     from_email = (cfg.get("smtp_from_email", "") or user).strip()
     if not host:
         raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -1843,7 +1869,7 @@ def send_smtp_email(to_addr, subject, body_text, settings=None):
     port = int(settings.get("smtp_port", 587) or 587)
     user = settings.get("smtp_user", "").strip()
     pw   = settings.get("smtp_pass", "")
-    from_name  = settings.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
+    from_name  = settings.get("smtp_from_name", "Vapur-IT").strip() or "Vapur-IT"
     from_email = (settings.get("smtp_from_email", "") or user).strip()
     if not host:
         raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -2903,7 +2929,7 @@ def backup():
     return send_file(
         buf,
         as_attachment=True,
-        download_name=f"systemhaus24_backup_{ts}.zip",
+        download_name=f"vapur-it_backup_{ts}.zip",
         mimetype="application/zip",
     )
 
@@ -3156,6 +3182,24 @@ def settings():
                            trusted_device_count=trusted_count)
 
 
+@app.route("/settings/promoter-preset", methods=["POST"])
+@admin_required
+def settings_promoter_preset():
+    """Setzt sinnvolle Promoter-Standardrechte: nur Vertriebs-Werkzeuge sichtbar, Rest gesperrt."""
+    blocked = ["customers", "quotes", "invoices", "contracts", "accounting",
+               "tickets", "support", "documents", "articles"]
+    allowed = ["klassifizierung", "akquise"]
+    db = get_db()
+    for k in blocked:
+        save_setting(f"promoter_block_{k}", "1", db)
+    for k in allowed:
+        save_setting(f"promoter_block_{k}", "", db)
+    db.commit()
+    db.close()
+    flash("Promoter-Standardrechte angewendet: nur Klassifizierung, Akquise und Provisionen sichtbar.", "success")
+    return redirect(url_for("settings") + "#berechtigungen")
+
+
 @app.route("/settings/notifications", methods=["POST"])
 @login_required
 def settings_notifications():
@@ -3350,7 +3394,7 @@ def settings_2fa_qr():
     db = get_db()
     user = db.execute("SELECT username FROM users WHERE id=%s", (session["user_id"],)).fetchone()
     db.close()
-    uri = pyotp.TOTP(secret).provisioning_uri(name=user["username"], issuer_name="Systemhaus24")
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user["username"], issuer_name="Vapur-IT")
     from io import BytesIO
     factory = qrcode.image.svg.SvgPathImage
     img = qrcode.make(uri, image_factory=factory, box_size=8, border=2)
@@ -3423,7 +3467,7 @@ def settings_test_smtp():
         flash("Bitte Test-E-Mail-Adresse eingeben", "error")
         return redirect(url_for("settings"))
     try:
-        send_smtp_email(to_addr, "Systemhaus24 SMTP-Test", "Verbindung erfolgreich! ✓", cfg)
+        send_smtp_email(to_addr, "Vapur-IT SMTP-Test", "Verbindung erfolgreich! ✓", cfg)
         flash(f"Test-E-Mail an {to_addr} gesendet ✓", "success")
     except Exception as e:
         flash(f"SMTP-Fehler: {e}", "error")
@@ -3811,10 +3855,11 @@ def referral_landing(code):
                       VALUES (%s,%s,%s,%s,%s,%s)""",
                    (ref["id"], name, company, email_a, phone, message))
         promoter_name = ref["display_name"] or ref["username"]
-        db.execute("""INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes)
-                      VALUES (%s,%s,%s,%s,%s,%s)""",
+        db.execute("""INSERT INTO leads (company, contact_name, contact_email, contact_phone, source, notes, assigned_to)
+                      VALUES (%s,%s,%s,%s,%s,%s,%s)""",
                    (company or None, name, email_a or None, phone or None, "Empfehlung",
-                    f"Über Referral-Link von {promoter_name}." + (f"\n\nNachricht: {message}" if message else "")))
+                    f"Über Referral-Link von {promoter_name}." + (f"\n\nNachricht: {message}" if message else ""),
+                    promoter_name))
         db.execute("INSERT INTO notifications (type, title, body, link) VALUES (%s,%s,%s,%s)",
                    ("promoter_register", "Neue Empfehlung eingegangen",
                     f"{name}{' (' + company + ')' if company else ''} über Referral-Link von {promoter_name}.",
@@ -4241,7 +4286,7 @@ def _create_invoice_from_recurring(db, rec):
                 subject = f"Rechnung {num}"
                 body = (f"Guten Tag {customer['name']},\n\n"
                         f"anbei erhalten Sie die Rechnung {num} für '{rec['name']}'.\n\n"
-                        f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Systemhaus24')}")
+                        f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Vapur-IT')}")
                 _smtp_send_pdf(cfg, customer["email"], subject, body, pdf_bytes, f"Rechnung_{num}.pdf")
                 db.execute("INSERT INTO invoice_emails (invoice_id, to_addr, subject, sent_by) VALUES (%s,%s,%s,%s)",
                            (inv_id, customer["email"], subject, "automatisch"))
@@ -4277,7 +4322,7 @@ def check_payment_reminders():
                                 f"wir möchten Sie freundlich daran erinnern, dass Rechnung {inv['number']} "
                                 f"am {date.fromisoformat(inv['due_date']).strftime('%d.%m.%Y')} fällig wird.\n\n"
                                 f"Die Rechnung finden Sie zu Ihrer Information nochmal anbei.\n\n"
-                                f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Systemhaus24')}")
+                                f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Vapur-IT')}")
                         _smtp_send_pdf(cfg, inv["customer_email"], subject, body, pdf_bytes, f"Rechnung_{inv['number']}.pdf")
                         db.execute("UPDATE invoices SET reminder_sent_at=%s WHERE id=%s",
                                    (datetime.now().isoformat(), inv["id"]))
@@ -4359,7 +4404,7 @@ def check_automation_rules():
                                 f"wir wollten kurz nachfragen, ob Sie sich bereits zu unserem Angebot {q['number']} "
                                 f"entscheiden konnten. Bei Fragen melden Sie sich gerne bei uns.\n\n"
                                 f"Das Angebot finden Sie zu Ihrer Information nochmal anbei.\n\n"
-                                f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Systemhaus24')}")
+                                f"Mit freundlichen Grüßen\n{cfg.get('company_name', 'Vapur-IT')}")
                         _smtp_send_pdf(cfg, q["customer_email"], subject, body, pdf_bytes, f"Angebot_{q['number']}.pdf")
                         _automation_mark_sent(db, rule_key, q["id"])
                         db.commit()
@@ -4760,7 +4805,7 @@ def contract_send_email(cid):
         port       = int(cfg.get("smtp_port", 587) or 587)
         user       = cfg.get("smtp_user", "").strip()
         pw         = cfg.get("smtp_pass", "")
-        from_name  = cfg.get("smtp_from_name", "Systemhaus24").strip() or "Systemhaus24"
+        from_name  = cfg.get("smtp_from_name", "Vapur-IT").strip() or "Vapur-IT"
         from_email = (cfg.get("smtp_from_email", "") or user).strip()
         if not host:
             raise ValueError("SMTP nicht konfiguriert (Host fehlt)")
@@ -4873,19 +4918,20 @@ def contract_delete(cid):
 # ── Akquise / Lead Pipeline ───────────────────────────────────────────────────
 
 LEAD_STAGES = [
-    ("new",        "Neu",              "bg-gray-100 text-gray-600"),
-    ("contacted",  "Kontaktiert",      "bg-blue-100 text-blue-700"),
-    ("proposal",   "Angebot gesendet", "bg-yellow-100 text-yellow-700"),
-    ("negotiation","Verhandlung",      "bg-orange-100 text-orange-700"),
-    ("won",        "Gewonnen",         "bg-green-100 text-green-700"),
-    ("lost",       "Verloren",         "bg-red-100 text-red-700"),
+    ("new",        "Neu",                     "bg-gray-100 text-gray-600"),
+    ("ready",      "Bereit zum Kontaktieren", "bg-teal-100 text-teal-700"),
+    ("contacted",  "Kontaktiert",             "bg-blue-100 text-blue-700"),
+    ("proposal",   "Angebot gesendet",        "bg-yellow-100 text-yellow-700"),
+    ("negotiation","Verhandlung",             "bg-orange-100 text-orange-700"),
+    ("won",        "Gewonnen",                "bg-green-100 text-green-700"),
+    ("lost",       "Verloren",                "bg-red-100 text-red-700"),
 ]
 STAGE_KEYS = [s[0] for s in LEAD_STAGES]
 
 LEAD_SOURCES = ["Website", "Empfehlung", "Kaltakquise", "LinkedIn", "Messe", "Promoter", "Sonstiges"]
 
 #  Abschlusswahrscheinlichkeit je Phase — fuer den gewichteten Pipeline-Forecast
-STAGE_PROBABILITY = {"new": 0.10, "contacted": 0.25, "proposal": 0.50, "negotiation": 0.75}
+STAGE_PROBABILITY = {"new": 0.10, "ready": 0.15, "contacted": 0.25, "proposal": 0.50, "negotiation": 0.75}
 
 _HIGH_QUALITY_SOURCES = ("Empfehlung", "Promoter")
 
@@ -4897,7 +4943,7 @@ def _score_lead(l, today_d):
     if v >= 5000:  score += 25
     elif v >= 1000: score += 18
     elif v > 0:     score += 8
-    score += {"new": 5, "contacted": 15, "proposal": 28, "negotiation": 38}.get(l["stage"], 0)
+    score += {"new": 5, "ready": 10, "contacted": 15, "proposal": 28, "negotiation": 38}.get(l["stage"], 0)
     if l["source"] in _HIGH_QUALITY_SOURCES:
         score += 12
     if l["next_followup"]:
@@ -5073,10 +5119,11 @@ def akquise_stage(lid):
     if new_stage not in STAGE_KEYS:
         abort(400)
     lost_reason = request.form.get("lost_reason", "").strip()
-    who = session.get("display_name") or session.get("username")
     db = get_db()
-    db.execute("UPDATE leads SET stage=%s, lost_reason=%s, assigned_to=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-               (new_stage, lost_reason if new_stage == "lost" else None, who, lid))
+    db.execute("UPDATE leads SET stage=%s, lost_reason=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+               (new_stage, lost_reason if new_stage == "lost" else None, lid))
+    db.execute("UPDATE leads SET assigned_to = COALESCE(NULLIF(assigned_to,''), %s) WHERE id=%s",
+               (session.get("display_name") or session["username"], lid))
     # Auto-activity log
     labels = {s[0]: s[1] for s in LEAD_STAGES}
     db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
@@ -5094,12 +5141,13 @@ def akquise_activity(lid):
     followup = request.form.get("next_followup") or None
     if not body:
         return redirect(url_for("akquise_detail", lid=lid))
-    who = session.get("display_name") or session.get("username")
     db = get_db()
     db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
                (lid, atype, body, session["username"]))
-    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=%s, assigned_to=%s WHERE id=%s",
-               (followup, who, lid))
+    db.execute("UPDATE leads SET updated_at=CURRENT_TIMESTAMP, next_followup=%s WHERE id=%s",
+               (followup, lid))
+    db.execute("UPDATE leads SET assigned_to = COALESCE(NULLIF(assigned_to,''), %s) WHERE id=%s",
+               (session.get("display_name") or session["username"], lid))
     db.commit()
     db.close()
     return redirect(url_for("akquise_detail", lid=lid))
@@ -5108,23 +5156,21 @@ def akquise_activity(lid):
 @app.route("/akquise/<int:lid>/edit", methods=["POST"])
 @login_required
 def akquise_edit(lid):
-    who = session.get("display_name") or session.get("username")
     db = get_db()
     db.execute("""UPDATE leads SET company=%s, contact_name=%s, contact_email=%s,
-                  contact_phone=%s, source=%s, deal_value=%s, notes=%s, next_followup=%s, link=%s,
-                  assigned_to=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (
+                  contact_phone=%s, notes=%s, next_followup=%s, link=%s,
+                  updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (
         request.form.get("company", "").strip(),
         request.form.get("contact_name", "").strip(),
         request.form.get("contact_email", "").strip(),
         request.form.get("contact_phone", "").strip(),
-        request.form.get("source", "Sonstiges"),
-        float(request.form.get("deal_value") or 0),
         request.form.get("notes", "").strip(),
         request.form.get("next_followup") or None,
         request.form.get("link", "").strip() or None,
-        who,
         lid,
     ))
+    db.execute("UPDATE leads SET assigned_to = COALESCE(NULLIF(assigned_to,''), %s) WHERE id=%s",
+               (session.get("display_name") or session["username"], lid))
     db.commit()
     db.close()
     flash("Lead aktualisiert.", "success")
@@ -5153,8 +5199,8 @@ def akquise_convert(lid):
         flash("Lead nicht gefunden.", "error")
         return redirect(url_for("akquise"))
     cnum = next_customer_number(db)
-    db.execute("""INSERT INTO customers (customer_number, name, company, email, phone, source, status)
-                  VALUES (%s,%s,%s,%s,%s,%s,%s)""", (
+    cust_id = db.execute("""INSERT INTO customers (customer_number, name, company, email, phone, source, status)
+                  VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""", (
         cnum,
         lead["contact_name"],
         lead["company"] or "",
@@ -5162,14 +5208,129 @@ def akquise_convert(lid):
         lead["contact_phone"] or "",
         lead["source"] or "",
         "customer",
-    ))
+    )).fetchone()["id"]
+
+    # Promoter automatisch zuweisen: der zustaendige Werber des Leads, 25% fuer genau 1 Jahr ab Onboarding.
+    # Der Admin kann die Zuweisung danach unter /promoters anpassen (Betrag/Zeitraum) oder entfernen.
+    promo_note = ""
+    if lead["assigned_to"]:
+        promo = db.execute(
+            "SELECT id FROM users WHERE role='promoter' AND (display_name=%s OR username=%s) LIMIT 1",
+            (lead["assigned_to"], lead["assigned_to"])).fetchone()
+        if promo:
+            start = date.today()
+            try:
+                end = start.replace(year=start.year + 1)
+            except ValueError:  # 29. Feb -> 28. Feb im Folgejahr
+                end = start.replace(year=start.year + 1, day=28)
+            db.execute("""INSERT INTO promoter_assignments
+                          (promoter_id, customer_id, commission_pct, start_date, end_date, notes, created_by)
+                          VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                       (promo["id"], cust_id, 25, start.isoformat(), end.isoformat(),
+                        "Automatisch bei Lead-Umwandlung", session["user_id"]))
+            promo_note = f" · Promoter {lead['assigned_to']} zugewiesen (25% bis {end.strftime('%d.%m.%Y')})"
+
     db.execute("UPDATE leads SET stage='won', updated_at=CURRENT_TIMESTAMP WHERE id=%s", (lid,))
     db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,%s,%s,%s)",
                (lid, "converted", f"In Kunde umgewandelt (Kundennr. {cnum})", session["username"]))
     db.commit()
     db.close()
-    flash(f"Lead als Kunde angelegt ({cnum}).", "success")
+    flash(f"Lead als Kunde angelegt ({cnum}).{promo_note}", "success")
     return redirect(url_for("akquise"))
+
+
+# ── Klassifizierung (Power-Dialer / Anruf-Warteschlange) ───────────────────────
+
+#  Bedingung fuer "gehoert in die Warteschlange":
+#   - noch nicht abgeschlossen (nicht won/lost) UND
+#   - entweder eine faellige Wiedervorlage (followup_at <= jetzt)
+#   - ODER ein neuer Lead ohne geplante Wiedervorlage
+_QUEUE_WHERE = """
+    l.stage NOT IN ('won','lost')
+    AND ( (l.followup_at IS NOT NULL AND l.followup_at <= %s)
+          OR (l.stage='new' AND l.followup_at IS NULL) )
+"""
+
+@app.route("/klassifizierung")
+@login_required
+def klassifizierung():
+    db = get_db()
+    now = datetime.now()
+    lead = db.execute(f"""
+        SELECT l.*,
+               (SELECT body FROM lead_activities WHERE lead_id=l.id ORDER BY created_at DESC LIMIT 1) AS last_activity
+        FROM leads l
+        WHERE {_QUEUE_WHERE}
+        ORDER BY
+          (CASE WHEN l.followup_at IS NOT NULL AND l.followup_at <= %s THEN 0 ELSE 1 END),
+          l.followup_at ASC NULLS LAST,
+          l.last_attempt_at ASC NULLS FIRST,
+          l.created_at ASC
+        LIMIT 1
+    """, (now, now)).fetchone()
+
+    queue_count = db.execute(f"SELECT COUNT(*) FROM leads l WHERE {_QUEUE_WHERE}", (now,)).fetchone()[0]
+    due_callbacks = db.execute(
+        "SELECT COUNT(*) FROM leads WHERE stage NOT IN ('won','lost') AND followup_at IS NOT NULL AND followup_at <= %s",
+        (now,)).fetchone()[0]
+
+    lead_d, activities, is_due_cb = None, [], False
+    if lead:
+        lead_d = dict(lead)
+        try:
+            lead_d["score"] = _score_lead(lead, date.today())
+        except Exception:
+            lead_d["score"] = 0
+        is_due_cb = bool(lead["followup_at"]) and lead["followup_at"] <= now
+        activities = db.execute(
+            "SELECT * FROM lead_activities WHERE lead_id=%s ORDER BY created_at DESC LIMIT 6", (lead["id"],)).fetchall()
+    db.close()
+    return render_template("klassifizierung.html", lead=lead_d, activities=activities,
+                           queue_count=queue_count, due_callbacks=due_callbacks,
+                           is_due_callback=is_due_cb, stages=LEAD_STAGES,
+                           now_str=now.strftime("%Y-%m-%dT%H:%M"))
+
+
+@app.route("/klassifizierung/<int:lid>/action", methods=["POST"])
+@login_required
+def klassifizierung_action(lid):
+    action = request.form.get("action", "")
+    note   = request.form.get("note", "").strip()
+    note_suffix = (" — " + note) if note else ""
+    db = get_db()
+    who = session["username"]
+
+    if action == "not_reached":
+        db.execute("""UPDATE leads SET last_attempt_at=CURRENT_TIMESTAMP,
+                      call_attempts=COALESCE(call_attempts,0)+1, updated_at=CURRENT_TIMESTAMP WHERE id=%s""", (lid,))
+        db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,'call',%s,%s)",
+                   (lid, "Telefonisch nicht erreicht" + note_suffix, who))
+
+    elif action == "callback":
+        fa = (request.form.get("followup_at", "") or "").strip().replace("T", " ")
+        if fa:
+            db.execute("""UPDATE leads SET followup_at=%s, next_followup=%s, last_attempt_at=CURRENT_TIMESTAMP,
+                          call_attempts=COALESCE(call_attempts,0)+1, updated_at=CURRENT_TIMESTAMP WHERE id=%s""",
+                       (fa, fa[:10], lid))
+            db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,'call',%s,%s)",
+                       (lid, f"Wiedervorlage gesetzt: {fa}" + note_suffix, who))
+
+    elif action == "stage":
+        new_stage = request.form.get("stage", "")
+        if new_stage in STAGE_KEYS:
+            lost_reason = request.form.get("lost_reason", "").strip()
+            db.execute("""UPDATE leads SET stage=%s, lost_reason=%s, followup_at=NULL, last_attempt_at=CURRENT_TIMESTAMP,
+                          call_attempts=COALESCE(call_attempts,0)+1, updated_at=CURRENT_TIMESTAMP WHERE id=%s""",
+                       (new_stage, lost_reason if new_stage == "lost" else None, lid))
+            labels = {s[0]: s[1] for s in LEAD_STAGES}
+            db.execute("INSERT INTO lead_activities (lead_id, type, body, created_by) VALUES (%s,'stage',%s,%s)",
+                       (lid, f"Klassifiziert → {labels.get(new_stage, new_stage)}" + note_suffix, who))
+
+    db.execute("UPDATE leads SET assigned_to = COALESCE(NULLIF(assigned_to,''), %s) WHERE id=%s",
+               (session.get("display_name") or who, lid))
+    db.commit()
+    db.close()
+    return redirect(url_for("klassifizierung"))
 
 
 # ── Init ──────────────────────────────────────────────────────────────────────

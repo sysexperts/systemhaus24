@@ -628,6 +628,22 @@
 
 <!-- ══════════════ TAB: Berechtigungen ══════════════ -->
 <div id="pane-berechtigungen" class="tab-pane hidden">
+
+  <form method="POST" action="{{ url_for('settings_promoter_preset') }}" class="max-w-xl mb-4"
+        onsubmit="return confirm('Promoter-Standardrechte anwenden? Promoter sehen dann nur Klassifizierung, Akquise und ihre Provisionen — alles andere wird gesperrt.');">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="rounded-2xl border border-[#1c3461]/15 bg-[#1c3461]/5 p-5 flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-[#1c3461] text-white flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.7"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+      </div>
+      <div class="flex-1">
+        <p class="text-sm font-semibold text-gray-700">Promoter-Standard anwenden</p>
+        <p class="text-xs text-gray-500 mt-0.5 mb-3">Ein Klick: Promoter sehen nur <b>Klassifizierung</b>, <b>Akquise</b> und <b>Meine Provisionen</b>. Alles andere (Rechnungen, Verträge, Buchhaltung, Tickets …) wird gesperrt. Du kannst unten einzeln nachjustieren.</p>
+        <button type="submit" class="bg-[#1c3461] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#2a4a8a] transition-colors">Standard anwenden</button>
+      </div>
+    </div>
+  </form>
+
   <form method="POST" action="{{ url_for('settings') }}#berechtigungen" class="max-w-xl">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="_tab" value="berechtigungen">
@@ -641,7 +657,7 @@
           ('customers', 'Kunden'), ('quotes', 'Angebote'), ('invoices', 'Rechnungen'),
           ('contracts', 'Verträge'), ('tickets', 'Tickets'), ('support', 'Fernwartung'),
           ('documents', 'Dokumente'), ('articles', 'Leistungen'), ('akquise', 'Akquise'),
-          ('accounting', 'Buchhaltung')
+          ('klassifizierung', 'Klassifizierung'), ('accounting', 'Buchhaltung')
         ] %}
         {% for mkey, mlabel in promoter_modules %}
         <label class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">

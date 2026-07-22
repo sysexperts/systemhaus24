@@ -158,7 +158,8 @@ def init_db():
             invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
             description TEXT NOT NULL,
             quantity REAL DEFAULT 1,
-            unit_price REAL NOT NULL
+            unit_price REAL NOT NULL,
+            commission_relevant BOOLEAN DEFAULT TRUE
         )""",
         """CREATE TABLE IF NOT EXISTS tickets (
             id SERIAL PRIMARY KEY,
@@ -503,6 +504,12 @@ def init_db():
     _safe_alter(conn, "ALTER TABLE leads ADD COLUMN IF NOT EXISTS link TEXT")
     # Zuständiger: Anzeigename des Benutzers, der den Lead zuletzt bearbeitet hat
     _safe_alter(conn, "ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_to TEXT")
+    # Provisionsrelevanz je Rechnungsposition (Material/Versand koennen abgewaehlt werden)
+    _safe_alter(conn, "ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS commission_relevant BOOLEAN DEFAULT TRUE")
+    # Klassifizierung / Power-Dialer: zeitgenaue Wiedervorlage, letzter Anrufversuch, Anzahl Versuche
+    _safe_alter(conn, "ALTER TABLE leads ADD COLUMN IF NOT EXISTS followup_at TIMESTAMP")
+    _safe_alter(conn, "ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMP")
+    _safe_alter(conn, "ALTER TABLE leads ADD COLUMN IF NOT EXISTS call_attempts INTEGER DEFAULT 0")
     conn.commit()
 
 
