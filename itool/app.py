@@ -292,6 +292,13 @@ def get_feed_data():
     return [dict(m) for m in messages], ticket_count, invoice_count
 
 
+@app.after_request
+def set_frame_headers(response):
+    # Einbettung nur in der eigenen Nextcloud erlauben (External Sites iframe), sonst Clickjacking-Schutz
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'self' https://nextcloud.vapur-it.de"
+    return response
+
+
 @app.context_processor
 def inject_globals():
     db = get_db()
